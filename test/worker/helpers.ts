@@ -122,3 +122,48 @@ export async function allFeedPages(call: (path: string) => Promise<Response>, pa
   } while (cursor);
   return pages;
 }
+
+/** Minimal lossy-WebP ("VP8 ") header of the given size, zero-padded to `totalBytes`. */
+export function fakeWebp(width: number, height: number, totalBytes = 64): Uint8Array {
+  const b = new Uint8Array(Math.max(totalBytes, 30));
+  const dv = new DataView(b.buffer);
+  const ascii = (o: number, s: string) => [...s].forEach((ch, i) => (b[o + i] = ch.charCodeAt(0)));
+  ascii(0, "RIFF");
+  dv.setUint32(4, b.length - 8, true);
+  ascii(8, "WEBP");
+  ascii(12, "VP8 ");
+  dv.setUint32(16, b.length - 20, true);
+  b[23] = 0x9d;
+  b[24] = 0x01;
+  b[25] = 0x2a;
+  dv.setUint16(26, width & 0x3fff, true);
+  dv.setUint16(28, height & 0x3fff, true);
+  return b;
+}
+
+export function uploadForm(o: {
+  project: string;
+  fingerprint?: string;
+  takenAt?: string;
+  caption?: string;
+  width?: number;
+  height?: number;
+  files?: Record<string, Uint8Array>;
+}): FormData {
+  const width = o.width ?? 1920;
+  const height = o.height ?? 1440;
+  const files = o.files ?? { w480: fakeWebp(480, 360), w960: fakeWebp(960, 720), w1920: fakeWebp(1920, 1440) };
+  const f = new FormData();
+  f.set("project", o.project);
+  f.set("fingerprint", o.fingerprint ?? randomHex());
+  f.set("takenAt", o.takenAt ?? "2026-10-06T14:12:00-05:00");
+  if (o.caption !== undefined) f.set("caption", o.caption);
+  f.set("width", String(width));
+  f.set("height", String(height));
+  for (const [name, bytes] of Object.entries(files)) f.set(name, new File([bytes], `${name}.webp`, { type: "image/webp" }));
+  return f;
+}
+
+export async function listKeys(prefix: string): Promise<string[]> {
+  return (await env.PHOTOS.list({ prefix })).objects.map((o) => o.key).sort();
+}

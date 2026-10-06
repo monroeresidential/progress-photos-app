@@ -4,6 +4,7 @@ import type { AppEnv, Deps } from "./env";
 import { HttpError } from "./http";
 import { registerFeed } from "./routes/feed";
 import { registerImages } from "./routes/img";
+import { registerUpload } from "./routes/upload";
 
 export function createApp(deps: Deps) {
   const app = new Hono<AppEnv>();
@@ -17,6 +18,7 @@ export function createApp(deps: Deps) {
 
   registerFeed(app, deps);
   registerImages(app, deps);
+  registerUpload(app, deps);
 
   app.notFound((c) => c.json({ error: "not_found", message: "Not found" }, 404));
   app.onError((err, c) => {
