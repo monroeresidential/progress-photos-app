@@ -72,8 +72,14 @@ export function mountManage(container: HTMLElement, getProject: () => ProjectSum
           if (!confirm("Delete this photo? This can't be undone.")) return;
           const res = await api.remove(photo.id);
           li.remove();
-          if (res?.purged === false || res?.objectsDeleted === false) status.textContent = "Deleted. Cached copies may take a minute to disappear.";
-          if (list.childElementCount === 0 && cursor === null) status.textContent = "No photos yet.";
+          let note = "";
+          if (res?.objectsDeleted === false) {
+            note = "Removed from the feed, but the image files couldn't be deleted and may still be reachable by direct link. Tell the site admin.";
+          } else if (res?.purged === false) {
+            note = "Deleted. Cached copies may take a minute to disappear.";
+          }
+          if (note) status.textContent = note;
+          else if (list.childElementCount === 0 && cursor === null) status.textContent = "No photos yet.";
         }),
     }, "Delete");
 
