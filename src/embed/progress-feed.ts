@@ -72,6 +72,7 @@ export class ProgressFeed extends HTMLElement {
   async #load(): Promise<void> {
     const project = this.getAttribute("project");
     if (!project) {
+      this.#failed = true;
       this.#showError();
       return;
     }
