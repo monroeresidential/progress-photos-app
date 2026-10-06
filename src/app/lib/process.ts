@@ -82,10 +82,13 @@ export async function processPhoto(file: File): Promise<Processed> {
 export async function makeThumb(file: File): Promise<string | null> {
   try {
     const bmp = await createImageBitmap(file, { resizeWidth: 240, resizeQuality: "medium", imageOrientation: "from-image" });
-    const canvas = new OffscreenCanvas(bmp.width, bmp.height);
-    canvas.getContext("2d")!.drawImage(bmp, 0, 0);
-    bmp.close();
-    return URL.createObjectURL(await canvas.convertToBlob({ type: "image/jpeg", quality: 0.7 }));
+    try {
+      const canvas = new OffscreenCanvas(bmp.width, bmp.height);
+      canvas.getContext("2d")!.drawImage(bmp, 0, 0);
+      return URL.createObjectURL(await canvas.convertToBlob({ type: "image/jpeg", quality: 0.7 }));
+    } finally {
+      bmp.close();
+    }
   } catch {
     return null;
   }

@@ -39,7 +39,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const body = (await res.json().catch(() => null)) as ApiErrorBody | null;
     throw new ApiError(res.status, body?.error ?? "http_error", body?.message ?? `HTTP ${res.status}`);
   }
-  return (res.status === 204 ? undefined : await res.json()) as T;
+  if (res.status === 204) return undefined as T;
+  try {
+    return (await res.json()) as T;
+  } catch {
+    // A 2xx that isn't JSON is an Access login page, not our API.
+    throw signinRequired();
+  }
 }
 
 export const api = {
@@ -50,6 +56,29 @@ export const api = {
     request<AdminPhoto>(`/api/admin/photos/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   remove: (id: string) => request<{ purged: false } | undefined>(`/api/admin/photos/${id}`, { method: "DELETE" }),
 };
+
+export const UPLOAD_STALL_MS = 60_000;
+
+/** Fires onStall if not reset within ms; reset() restarts the countdown, clear() cancels it. */
+export function createStallTimer(
+  ms: number,
+  onStall: () => void,
+  setT: (fn: () => void, ms: number) => unknown = setTimeout,
+  clearT: (id: any) => void = clearTimeout,
+): { reset(): void; clear(): void } {
+  let id: unknown = null;
+  const clear = () => {
+    if (id !== null) clearT(id);
+    id = null;
+  };
+  return {
+    reset() {
+      clear();
+      id = setT(onStall, ms);
+    },
+    clear,
+  };
+}
 
 /** XHR rather than fetch so the UI gets upload progress. */
 export function uploadPhoto(
@@ -67,13 +96,28 @@ export function uploadPhoto(
   form.set("height", String(p.height));
   for (const v of p.variants) form.set(`w${v.width}`, v.blob, `${v.width}.webp`);
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, rejectRaw) => {
     const xhr = new XMLHttpRequest();
+    let settled = false;
+    const stall = createStallTimer(UPLOAD_STALL_MS, () => xhr.abort());
+    const reject = (e: unknown) => {
+      if (settled) return;
+      settled = true;
+      stall.clear();
+      rejectRaw(e);
+    };
+    const stalled = () => reject(new ApiError(0, "network", "Upload stalled — check your connection and retry"));
+    xhr.onabort = stalled;
+    xhr.ontimeout = stalled;
+    xhr.onprogress = () => stall.reset();
     xhr.open("POST", "/api/admin/photos");
     xhr.upload.onprogress = (e) => {
+      stall.reset();
       if (e.lengthComputable) onProgress(e.loaded / e.total);
     };
     xhr.onload = () => {
+      stall.clear();
+      if (settled) return;
       let body: unknown = null;
       try {
         body = JSON.parse(xhr.responseText);
@@ -81,7 +125,10 @@ export function uploadPhoto(
         // non-JSON (e.g. an Access login page)
       }
       if (xhr.status === 200 || xhr.status === 201) {
-        if (body && typeof body === "object" && "id" in body) resolve(body as { id: string; duplicate?: boolean });
+        if (body && typeof body === "object" && "id" in body) {
+          settled = true;
+          resolve(body as { id: string; duplicate?: boolean });
+        }
         else reject(signinRequired());
       } else if (xhr.status === 401) {
         reject(signinRequired());
@@ -95,6 +142,7 @@ export function uploadPhoto(
         reject(s === "signin" ? signinRequired() : new ApiError(0, "network", "Network error — check your connection and retry")),
       );
     };
+    stall.reset();
     xhr.send(form);
   });
 }
