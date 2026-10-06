@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findOrphans, GRACE_MS } from "../../scripts/lib/orphans.ts";
+import { findOrphans, GRACE_MS, orphanSafetyCheck } from "../../scripts/lib/orphans.ts";
 
 const NOW = Date.parse("2026-10-06T12:00:00Z");
 const old = new Date(NOW - GRACE_MS - 1).toISOString();
@@ -34,5 +34,21 @@ describe("findOrphans", () => {
       NOW,
     );
     expect(r).toEqual({ orphans: [], unrecognised: ["notes.txt"], recent: 1 });
+  });
+});
+
+describe("orphanSafetyCheck", () => {
+  it("refuses when D1 returned no photo ids but objects exist", () => {
+    expect(orphanSafetyCheck({ recognisedOld: 3, orphans: [], photoIds: new Set() })).toMatch(/no rows|0 photo/i);
+    expect(orphanSafetyCheck({ recognisedOld: 0, orphans: [], photoIds: new Set() })).toBeNull();
+  });
+
+  it("refuses when every old recognised object would be deleted", () => {
+    expect(orphanSafetyCheck({ recognisedOld: 2, orphans: ["a", "b"], photoIds: new Set([ID_A]) })).toMatch(/every|all/i);
+  });
+
+  it("passes when only some old objects are orphans", () => {
+    expect(orphanSafetyCheck({ recognisedOld: 3, orphans: ["a"], photoIds: new Set([ID_A]) })).toBeNull();
+    expect(orphanSafetyCheck({ recognisedOld: 3, orphans: [], photoIds: new Set([ID_A]) })).toBeNull();
   });
 });

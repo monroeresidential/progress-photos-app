@@ -1,8 +1,9 @@
 // npm run cleanup:orphans -- --env <staging|production>
+// Add --allow-all to override the refusal when every old object would be deleted.
 // Needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN (R2 read + D1 read + R2 write).
 import { execFileSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
-import { findOrphans, type StoredObject } from "./lib/orphans.ts";
+import { countRecognisedOld, findOrphans, orphanSafetyCheck, type StoredObject } from "./lib/orphans.ts";
 
 const envFlag = process.argv.indexOf("--env");
 const target = envFlag >= 0 ? process.argv[envFlag + 1] : undefined;
@@ -53,10 +54,20 @@ function photoIds(): Set<string> {
 }
 
 const objects = await listObjects();
-const { orphans, unrecognised, recent } = findOrphans(objects, photoIds(), Date.now());
-console.log(`${objects.length} objects; ${orphans.length} orphaned; ${recent} too recent to judge; ${unrecognised.length} unrecognised.`);
+const ids = photoIds();
+const now = Date.now();
+const { orphans, unrecognised, recent } = findOrphans(objects, ids, now);
+console.log(`${objects.length} objects; ${ids.size} photo rows in D1; ${orphans.length} orphaned; ${recent} too recent to judge; ${unrecognised.length} unrecognised.`);
 for (const k of unrecognised) console.log(`  unrecognised (left alone): ${k}`);
 if (orphans.length === 0) process.exit(0);
+const refusal = orphanSafetyCheck({ recognisedOld: countRecognisedOld(objects, now), orphans, photoIds: ids });
+if (refusal) {
+  if (!process.argv.includes("--allow-all")) {
+    console.error(`${refusal}\nRe-run with --allow-all only if you are certain.`);
+    process.exit(1);
+  }
+  console.warn(`WARNING: ${refusal} Continuing because --allow-all was given.`);
+}
 for (const k of orphans) console.log(`  orphan: ${k}`);
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
