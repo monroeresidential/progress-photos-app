@@ -13,26 +13,26 @@
     "run_worker_first": ["/api/*", "/img/*"]
   },
   "vars": {
-    "ACCESS_TEAM_DOMAIN": "SET-IN-TASK-13.cloudflareaccess.com",
+    "ACCESS_TEAM_DOMAIN": "monroeresidential.cloudflareaccess.com",
     "ACCESS_AUD": "SET-IN-TASK-13",
     "PUBLIC_BASE_URL": "https://progress.monroeresidential.com",
-    "CF_ZONE_ID": "SET-IN-TASK-13"
+    "CF_ZONE_ID": "28eca5d8a4bbf40714225019adb8c324"
   },
   "d1_databases": [
-    { "binding": "DB", "database_name": "progress-photos", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
+    { "binding": "DB", "database_name": "progress-photos", "database_id": "6cda6c96-61db-467f-9364-f26bc2ce5c2a", "migrations_dir": "migrations" }
   ],
   "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "progress-photos" }],
   "env": {
     "staging": {
       "routes": [{ "pattern": "progress-staging.monroeresidential.com", "custom_domain": true }],
       "vars": {
-        "ACCESS_TEAM_DOMAIN": "SET-IN-TASK-13.cloudflareaccess.com",
-        "ACCESS_AUD": "SET-IN-TASK-13",
+        "ACCESS_TEAM_DOMAIN": "monroeresidential.cloudflareaccess.com",
+        "ACCESS_AUD": "82f33001b544a392dfba962dc8be6c80a96b83d1fb3b44ff48ded65fda09d64d",
         "PUBLIC_BASE_URL": "https://progress-staging.monroeresidential.com",
-        "CF_ZONE_ID": "SET-IN-TASK-13"
+        "CF_ZONE_ID": "28eca5d8a4bbf40714225019adb8c324"
       },
       "d1_databases": [
-        { "binding": "DB", "database_name": "progress-photos-staging", "database_id": "00000000-0000-0000-0000-000000000001", "migrations_dir": "migrations" }
+        { "binding": "DB", "database_name": "progress-photos-staging", "database_id": "3322e313-8276-4610-b5df-59c231837968", "migrations_dir": "migrations" }
       ],
       "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "progress-photos-staging" }]
     }
