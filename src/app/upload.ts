@@ -12,7 +12,7 @@ const LABEL: Record<Status, string> = {
   duplicate: "Duplicate (already uploaded)",
   unreadable: "Can't read this photo",
   failed: "Failed",
-  signin: "Sign-in expired — reload to sign in",
+  signin: "Sign-in expired — sign in again, then Retry",
 };
 
 interface Item {

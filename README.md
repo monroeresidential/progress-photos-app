@@ -48,9 +48,10 @@ Notes:
 2. `npx wrangler d1 create progress-photos` and `npx wrangler d1 create progress-photos-staging`; put the IDs in `wrangler.jsonc`.
 3. `npx wrangler r2 bucket create progress-photos` and `npx wrangler r2 bucket create progress-photos-staging`.
 4. Zero Trust → Access → Applications → add a self-hosted app for `progress.monroeresidential.com` (and another for `progress-staging.…`) with an Allow policy for the uploaders' emails. Add **Bypass** policies (Everyone) for the paths `/api/feed/*`, `/img/*`, `/embed.js`, `/embed/*` — create these as separate Access applications on those paths so the bypass takes precedence. Copy each app's **AUD tag** and the team domain into `ACCESS_AUD` / `ACCESS_TEAM_DOMAIN` in `wrangler.jsonc`. Both must be non-empty: with either empty, `/api/admin/*` returns 500 `auth_misconfigured` (fails closed).
-5. Put the `monroeresidential.com` zone ID in `CF_ZONE_ID`. Create an API token with **Zone → Cache Purge** on that zone and run `npx wrangler secret put CF_PURGE_TOKEN` (and again with `--env staging`).
+5. Put the `monroeresidential.com` zone ID in `CF_ZONE_ID`. Create an API token with **Zone → Cache Purge** on that zone and run `npx wrangler secret put CF_PURGE_TOKEN` (and again with `--env staging`). Run before the first deploy, Wrangler offers to create the Worker; accept, or run this after the first CI deploy.
 6. GitHub repo secrets: `CLOUDFLARE_API_TOKEN` (Workers Scripts edit, D1 edit, R2 edit, Workers Custom Domains edit) and `CLOUDFLARE_ACCOUNT_ID`.
-7. Pushing to `main` deploys staging; run the "Deploy production" workflow to deploy production.
+7. In GitHub, create environments `staging` and `production` (Settings → Environments); add required reviewers to `production`.
+8. Pushing to `main` deploys staging; run the "Deploy production" workflow to deploy production.
 
 ## Orphaned images
 

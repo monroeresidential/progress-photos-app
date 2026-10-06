@@ -55,10 +55,10 @@ Playwright against `wrangler dev`, ULIDs for photo ids.
   failure is reported as `purged: false`, not rolled back.
 - **Dedup** is by `(project_slug, fingerprint)` where fingerprint is SHA-256 of
   the original file bytes; a repeat returns `200 { id, duplicate: true }`.
-- **Feed pagination is keyset** on `taken_at DESC, id DESC`, cursor =
-  base64url of `taken_at|id`, page size 24, `hidden = 0` only. The admin list
-  uses the same shape but includes hidden photos.
-- **`taken_utc` orders, `taken_at` displays.** Sorting/cursors use the UTC column; day headings use the date in `taken_at`'s own offset.
+- **Feed pagination is keyset** on `taken_utc DESC, id DESC`, cursor =
+  base64url of `taken_utc|id`, page size 24, `hidden = 0` only. The admin list
+  uses the same shape but includes hidden photos. `taken_utc` orders;
+  `taken_at` (with its own offset) displays: day headings use its local date.
 - **The app is built by `createApp(deps)`** with injected `fetch` (JWKS, purge), `cache` and `now`; Worker tests call `app.fetch` directly via `test/worker/helpers.ts#harness` rather than `SELF`.
 - **Feed cache key = purge URL = `feedUrl(PUBLIC_BASE_URL, slug, cursor)`.** Change one and you break delete-time purging.
 - **Pinned embeds (`/embed/<version>.js`) keep calling `/api/feed`**, so the feed response shape must stay backward compatible.
