@@ -117,3 +117,12 @@ test.describe("without JavaScript", () => {
     await expect(page.getByText("Photos need JavaScript.")).toBeVisible();
   });
 });
+
+test("removing the element while the viewer is open restores page scrolling", async ({ page }) => {
+  await openHost(page, { project: "e2e-feed" });
+  await feed(page).locator(".open").first().click();
+  await expect(feed(page).locator(".overlay")).toBeVisible();
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).toBe("hidden");
+  await page.evaluate(() => document.querySelector("progress-feed")!.remove());
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).not.toBe("hidden");
+});

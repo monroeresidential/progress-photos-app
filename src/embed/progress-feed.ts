@@ -56,6 +56,7 @@ export class ProgressFeed extends HTMLElement {
 
   disconnectedCallback(): void {
     this.#observer.disconnect();
+    this.#viewer.dismiss(); // restores the host page's overflow
   }
 
   loadMore(): Promise<void> {

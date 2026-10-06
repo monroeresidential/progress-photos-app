@@ -91,13 +91,18 @@ export class Viewer {
     this.#close.focus();
   }
 
-  close(): void {
+  /** Close without returning focus, for when the host element is leaving the DOM. */
+  dismiss(): void {
+    this.close(false);
+  }
+
+  close(restoreFocus = true): void {
     if (!this.isOpen) return;
     const i = this.#index;
     this.#index = -1;
     this.element.hidden = true;
     document.documentElement.style.overflow = this.#savedOverflow;
-    this.src.opener(i)?.focus();
+    if (restoreFocus) this.src.opener(i)?.focus();
   }
 
   async step(delta: 1 | -1): Promise<void> {
