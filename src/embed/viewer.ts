@@ -29,6 +29,7 @@ export class Viewer {
   #next = button("next", "Next photo", "›");
   #index = -1;
   #startX: number | null = null;
+  #swiped = false;
   #savedOverflow = "";
   readonly root: ShadowRoot;
   readonly src: ViewerSource;
@@ -39,6 +40,7 @@ export class Viewer {
     const el = this.element;
     el.className = "overlay";
     el.hidden = true;
+    el.tabIndex = -1;
     el.setAttribute("role", "dialog");
     el.setAttribute("aria-modal", "true");
     el.setAttribute("aria-label", "Photo viewer");
@@ -52,16 +54,28 @@ export class Viewer {
     this.#prev.addEventListener("click", () => void this.step(-1));
     this.#next.addEventListener("click", () => void this.step(1));
     el.addEventListener("click", (e) => {
+      if (this.#swiped) {
+        this.#swiped = false;
+        return;
+      }
       if (e.target === el) this.close();
     });
     el.addEventListener("keydown", (e) => this.#onKey(e));
-    el.addEventListener("pointerdown", (e) => (this.#startX = e.clientX));
+    el.addEventListener("pointerdown", (e) => {
+      this.#startX = e.clientX;
+      this.#swiped = false;
+      if (!(e.target instanceof HTMLButtonElement)) el.focus({ preventScroll: true });
+    });
     el.addEventListener("pointerup", (e) => {
       if (this.#startX === null) return;
       const dx = e.clientX - this.#startX;
       this.#startX = null;
-      if (Math.abs(dx) > SWIPE_PX) void this.step(dx < 0 ? 1 : -1);
+      if (Math.abs(dx) > SWIPE_PX) {
+        this.#swiped = true;
+        void this.step(dx < 0 ? 1 : -1);
+      }
     });
+    el.addEventListener("pointercancel", () => (this.#startX = null));
   }
 
   get isOpen(): boolean {
@@ -110,8 +124,12 @@ export class Viewer {
     img.srcset = srcsetAttr(p.srcset);
     img.src = largestSrc(p.srcset);
     this.#caption.textContent = p.caption ?? "";
-    this.#prev.disabled = this.#index === 0;
-    this.#next.disabled = this.#index >= this.src.count() - 1 && !this.src.hasMore();
+    const prevOff = this.#index === 0;
+    const nextOff = this.#index >= this.src.count() - 1 && !this.src.hasMore();
+    const active = this.root.activeElement;
+    if ((prevOff && active === this.#prev) || (nextOff && active === this.#next)) this.#close.focus();
+    this.#prev.disabled = prevOff;
+    this.#next.disabled = nextOff;
   }
 
   #onKey(e: KeyboardEvent): void {

@@ -23,7 +23,7 @@ export class ProgressFeed extends HTMLElement {
   #lastDay: { key: string; grid: HTMLElement } | null = null;
   #cursor: string | null = null;
   #started = false;
-  #loading = false;
+  #loading: Promise<void> | null = null;
   #done = false;
   #failed = false;
   #sentinelVisible = false;
@@ -58,14 +58,23 @@ export class ProgressFeed extends HTMLElement {
     this.#observer.disconnect();
   }
 
-  async loadMore(): Promise<void> {
-    if (this.#loading || this.#done) return;
+  loadMore(): Promise<void> {
+    if (this.#loading) return this.#loading;
+    if (this.#done) return Promise.resolve();
+    const p: Promise<void> = this.#load().finally(() => {
+      if (this.#loading === p) this.#loading = null;
+      if (!this.#done && !this.#failed && this.#sentinelVisible) void this.loadMore();
+    });
+    this.#loading = p;
+    return p;
+  }
+
+  async #load(): Promise<void> {
     const project = this.getAttribute("project");
     if (!project) {
       this.#showError();
       return;
     }
-    this.#loading = true;
     this.#failed = false;
     this.#setStatus("Loading photos…");
     try {
@@ -77,16 +86,13 @@ export class ProgressFeed extends HTMLElement {
       for (const p of page.photos) this.#append(p);
       this.#cursor = page.nextCursor;
       this.#done = page.nextCursor === null;
-      this.#loading = false;
       if (this.#done) this.#setStatus(this.#photos.length === 0 ? "No photos yet." : "That's the beginning", this.#photos.length > 0);
       else this.#setStatus("");
     } catch {
-      this.#loading = false;
       this.#failed = true;
       this.#showError();
       return;
     }
-    if (!this.#done && this.#sentinelVisible) void this.loadMore();
   }
 
   #setStatus(text: string, isEnd = false): void {
