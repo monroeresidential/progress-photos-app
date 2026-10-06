@@ -28,7 +28,7 @@ interface Item {
   remove: HTMLButtonElement;
 }
 
-export function mountUpload(container: HTMLElement, getProject: () => ProjectSummary): void {
+export function mountUpload(container: HTMLElement, getProject: () => ProjectSummary, onRunningChange?: (running: boolean) => void): void {
   const items: Item[] = [];
   let running = false;
 
@@ -37,11 +37,13 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
   const list = h("ul");
   const uploadBtn = h("button", { class: "primary", disabled: true, onclick: () => void runQueue() }, "Upload");
   const summary = h("p", { class: "summary" });
+  const notice = h("p", { class: "notice", hidden: true }, "Your sign-in expired. ", h("a", { href: "/", target: "_blank", rel: "noopener" }, "Sign in again"));
 
   container.replaceChildren(
     h("button", { class: "add", onclick: () => fileInput.click() }, "Add photos"),
     fileInput,
     h("label", { class: "field" }, "Caption for this batch", batchCaption),
+    notice,
     list,
     uploadBtn,
     summary,
@@ -60,7 +62,7 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     item.statusText.textContent = detail ? `${LABEL[status]} — ${detail}` : LABEL[status];
     item.statusText.className = status === "failed" || status === "unreadable" || status === "signin" ? "status-text error" : "status-text";
     item.progress.hidden = status !== "working";
-    item.retry.hidden = status !== "failed";
+    item.retry.hidden = status !== "failed" && status !== "signin";
     item.remove.hidden = status !== "ready";
     refresh();
   }
@@ -121,13 +123,31 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
   async function runQueue(): Promise<void> {
     if (running) return;
     running = true;
+    notice.hidden = true;
+    onRunningChange?.(true);
     refresh();
     const project = getProject();
     let next: Item | undefined;
-    while ((next = items.find((i) => i.status === "ready"))) await uploadOne(next, project);
+    while ((next = items.find((i) => i.status === "ready"))) {
+      await uploadOne(next, project);
+      if (next.status === "signin") {
+        notice.hidden = false;
+        break;
+      }
+    }
     running = false;
+    onRunningChange?.(false);
     refresh();
     const published = items.filter((i) => i.status === "done" || i.status === "duplicate").length;
-    summary.replaceChildren(`${published} of ${items.length} published. `, h("a", { href: project.siteUrl, target: "_blank", rel: "noopener" }, "View on site"));
+    summary.replaceChildren(`${published} of ${items.length} published. `, (safeHttp(project.siteUrl) ? h("a", { href: project.siteUrl, target: "_blank", rel: "noopener" }, "View on site") : ""));
+  }
+}
+
+function safeHttp(url: string): boolean {
+  try {
+    const p = new URL(url).protocol;
+    return p === "http:" || p === "https:";
+  } catch {
+    return false;
   }
 }

@@ -51,7 +51,6 @@ test("uploads a photo, flags a re-upload as duplicate, and manages it", async ({
   await caption.fill("Edited caption");
   await page.getByRole("button", { name: "Save" }).first().click();
   await expect(page.getByText("Saved")).toBeVisible(); // the PATCH has completed before Hide fires another
-  await expect(page.getByText("Saved")).toBeVisible(); // the PATCH has completed before Hide fires another
   await page.getByRole("button", { name: "Hide" }).first().click();
   await expect(page.getByRole("button", { name: "Unhide" }).first()).toBeVisible();
   // Check via the admin list: the public feed is edge-cached for 60 s, so it may still show the photo.

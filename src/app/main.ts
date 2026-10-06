@@ -53,7 +53,7 @@ async function start(): Promise<void> {
 
   const uploadPane = h("section", { role: "tabpanel" });
   const managePane = h("section", { role: "tabpanel", hidden: true });
-  mountUpload(uploadPane, () => current);
+  mountUpload(uploadPane, () => current, (running) => (picker.disabled = running));
   const manage = mountManage(managePane, () => current);
 
   const uploadTab = h("button", { role: "tab", "aria-selected": "true" }, "Upload");

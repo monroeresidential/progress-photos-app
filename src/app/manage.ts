@@ -38,12 +38,16 @@ export function mountManage(container: HTMLElement, getProject: () => ProjectSum
     const li = h("li", { class: photo.hidden ? "card hidden-photo" : "card" });
     const hide = h("button", {}, photo.hidden ? "Unhide" : "Hide");
 
+    const buttons: HTMLButtonElement[] = [];
     async function act(fn: () => Promise<void>): Promise<void> {
       note.textContent = "";
+      for (const b of buttons) b.disabled = true;
       try {
         await fn();
       } catch (err) {
         note.textContent = errorMessage(err);
+      } finally {
+        for (const b of buttons) b.disabled = false;
       }
     }
 
@@ -73,6 +77,7 @@ export function mountManage(container: HTMLElement, getProject: () => ProjectSum
         }),
     }, "Delete");
 
+    buttons.push(save, hide, del);
     li.append(
       h("img", { src: smallestSrc(photo.srcset), alt: "", loading: "lazy" }),
       h("div", { class: "meta" }, h("span", { class: "muted" }, new Date(photo.takenAt).toLocaleString()), caption, h("div", { class: "row" }, save, hide, del), note),
