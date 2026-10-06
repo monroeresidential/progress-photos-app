@@ -148,6 +148,6 @@ export function uploadPhoto(
 }
 
 export function errorMessage(err: unknown): string {
-  if (err instanceof ApiError && err.code === "signin_required") return "Your sign-in expired. Reload the page to sign in again.";
+  if (err instanceof ApiError && err.code === "signin_required") return "Your sign-in expired. Close and reopen the app to sign in again.";
   return err instanceof Error ? err.message : String(err);
 }

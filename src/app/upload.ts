@@ -37,7 +37,7 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
   const list = h("ul");
   const uploadBtn = h("button", { class: "primary", disabled: true, onclick: () => void runQueue() }, "Upload");
   const summary = h("p", { class: "summary" });
-  const notice = h("p", { class: "notice", hidden: true }, "Your sign-in expired. ", h("a", { href: "/", target: "_blank", rel: "noopener" }, "Sign in again"));
+  const notice = h("p", { class: "notice", hidden: true }, "Your sign-in expired. ", h("a", { href: "/", target: "_blank", rel: "noopener" }, "Sign in again"), " If Retry still fails, close and reopen the app.");
 
   container.replaceChildren(
     h("button", { class: "add", onclick: () => fileInput.click() }, "Add photos"),

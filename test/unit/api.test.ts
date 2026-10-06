@@ -11,7 +11,7 @@ describe("interpretProbe", () => {
 
 describe("errorMessage", () => {
   it("tells the uploader to sign in again when the session expired", () => {
-    expect(errorMessage(new ApiError(401, "signin_required", "x"))).toBe("Your sign-in expired. Reload the page to sign in again.");
+    expect(errorMessage(new ApiError(401, "signin_required", "x"))).toBe("Your sign-in expired. Close and reopen the app to sign in again.");
     expect(errorMessage(new ApiError(400, "bad_request", "Caption too long"))).toBe("Caption too long");
   });
 });
