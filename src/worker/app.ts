@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { createAccessVerifier, requireAccess } from "./access";
 import type { AppEnv, Deps } from "./env";
 import { HttpError } from "./http";
+import { registerAdmin } from "./routes/admin";
 import { registerFeed } from "./routes/feed";
 import { registerImages } from "./routes/img";
 import { registerUpload } from "./routes/upload";
@@ -16,11 +17,11 @@ export function createApp(deps: Deps) {
   });
   app.use("/api/admin/*", requireSameOrigin());
   app.use("/api/admin/*", requireAccess(createAccessVerifier(deps.fetch)));
-  app.get("/api/admin/whoami", (c) => c.json({ email: c.var.email }));
 
   registerFeed(app, deps);
   registerImages(app, deps);
   registerUpload(app, deps);
+  registerAdmin(app, deps);
 
   app.notFound((c) => c.json({ error: "not_found", message: "Not found" }, 404));
   app.onError((err, c) => {

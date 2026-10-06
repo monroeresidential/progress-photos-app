@@ -23,7 +23,7 @@ describe("requireSameOrigin", () => {
   });
 
   it("does not affect reads", async () => {
-    const res = await harness().admin("/api/admin/whoami", { headers: { Origin: "https://evil.example" } });
+    const res = await harness().admin("/api/admin/projects", { headers: { Origin: "https://evil.example" } });
     expect(res.status).toBe(200);
   });
 });

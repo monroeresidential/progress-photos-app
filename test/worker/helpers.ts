@@ -57,12 +57,18 @@ export interface HarnessOptions {
   cache?: Cache;
   now?: number;
   jwks?: JWK[];
+  purge?: "ok" | "fail";
 }
 
 export function harness(opts: HarnessOptions = {}) {
   const fetchCalls: Request[] = [];
   const upstream = async (req: Request): Promise<Response> => {
     if (req.url === JWKS_URL) return Response.json({ keys: opts.jwks ?? [publicJwk] });
+    if (req.url.startsWith("https://api.cloudflare.com/")) {
+      return opts.purge === "fail"
+        ? Response.json({ success: false, errors: [{ code: 1001, message: "simulated" }] }, { status: 400 })
+        : Response.json({ success: true });
+    }
     return new Response("unmocked", { status: 599 });
   };
   const app = createApp({
