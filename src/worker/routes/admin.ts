@@ -66,11 +66,19 @@ export function registerAdmin(app: App, deps: Deps): void {
     const widths = photoWidths(row);
     const base = c.env.PUBLIC_BASE_URL;
     await deletePhotoRow(c.env.DB, row.id);
-    await c.env.PHOTOS.delete(widths.map((w) => imageKey(row.project_slug, row.id, w)));
+    // The row is already gone, so a failure here must not skip the purge: edge copies are immutable.
+    let objectsDeleted = true;
+    try {
+      await c.env.PHOTOS.delete(widths.map((w) => imageKey(row.project_slug, row.id, w)));
+    } catch (e) {
+      objectsDeleted = false;
+      console.error("R2 delete failed after row delete", row.id, e);
+    }
     const purged = await purgeUrls(deps.fetch, c.env, [
       ...widths.map((w) => imageUrl(base, row.project_slug, row.id, w)),
       feedUrl(base, row.project_slug),
     ]);
-    return purged ? c.body(null, 204) : c.json({ purged: false }, 200);
+    if (purged && objectsDeleted) return c.body(null, 204);
+    return c.json({ purged, ...(objectsDeleted ? {} : { objectsDeleted: false }) }, 200);
   });
 }

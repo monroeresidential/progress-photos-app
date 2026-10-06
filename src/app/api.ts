@@ -54,7 +54,7 @@ export const api = {
     request<FeedPage<AdminPhoto>>(`/api/admin/photos?project=${encodeURIComponent(project)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`),
   patch: (id: string, body: { caption?: string | null; hidden?: boolean }) =>
     request<AdminPhoto>(`/api/admin/photos/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
-  remove: (id: string) => request<{ purged: false } | undefined>(`/api/admin/photos/${id}`, { method: "DELETE" }),
+  remove: (id: string) => request<{ purged?: boolean; objectsDeleted?: boolean } | undefined>(`/api/admin/photos/${id}`, { method: "DELETE" }),
 };
 
 export const UPLOAD_STALL_MS = 60_000;

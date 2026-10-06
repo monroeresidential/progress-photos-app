@@ -97,6 +97,35 @@ describe("admin routes", () => {
     }
   });
 
+  it("still purges and reports objectsDeleted:false when the R2 delete throws", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const slug = await seedProject();
+      const id = await seedWithObjects(slug);
+      const h = harness({
+        env: {
+          CF_PURGE_TOKEN: "t",
+          PHOTOS: new Proxy(env.PHOTOS, {
+            get: (target, prop) =>
+              prop === "delete"
+                ? async () => {
+                    throw new Error("R2 down");
+                  }
+                : Reflect.get(target, prop).bind(target),
+          }),
+        },
+      });
+      const res = await h.admin(`/api/admin/photos/${id}`, { method: "DELETE" });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ purged: true, objectsDeleted: false });
+      expect(await env.DB.prepare("SELECT id FROM photos WHERE id = ?").bind(id).first()).toBeNull();
+      expect(h.fetchCalls.some((r) => r.url === "https://api.cloudflare.com/client/v4/zones/zone123/purge_cache")).toBe(true);
+      expect(errSpy).toHaveBeenCalled();
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
   it("reports purged:false without calling the API when no purge token is set", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
