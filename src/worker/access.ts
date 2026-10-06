@@ -40,6 +40,10 @@ export function requireAccess(verify: Verify): MiddlewareHandler<AppEnv> {
       c.set("email", c.env.DEV_AUTH_EMAIL);
       return next();
     }
+    if (!c.env.ACCESS_AUD || !c.env.ACCESS_TEAM_DOMAIN) {
+      console.error("Access is misconfigured: ACCESS_AUD and ACCESS_TEAM_DOMAIN must both be set");
+      throw new HttpError(500, "auth_misconfigured", "Sign-in is not configured");
+    }
     const token = c.req.header("Cf-Access-Jwt-Assertion");
     if (!token) throw new HttpError(401, "unauthorized", "Sign in required");
     try {

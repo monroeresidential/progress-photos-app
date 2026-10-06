@@ -1,14 +1,21 @@
 import { generateKeyPair } from "jose";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { accessToken, harness, JWKS_URL } from "./helpers";
 
 const withToken = (token: string) => ({ headers: { "Cf-Access-Jwt-Assertion": token } });
 
 describe("Access verification on /api/admin/*", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => vi.restoreAllMocks());
+
   it("rejects a missing token", async () => {
     const res = await harness().call("/api/admin/whoami");
     expect(res.status).toBe(401);
     expect(await res.json()).toMatchObject({ error: "unauthorized" });
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 
   it.each([
@@ -56,5 +63,11 @@ describe("Access verification on /api/admin/*", () => {
   it("marks admin responses no-store", async () => {
     const res = await harness().call("/api/admin/whoami", withToken(await accessToken()));
     expect(res.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it.each([["ACCESS_AUD"], ["ACCESS_TEAM_DOMAIN"]])("fails closed with 500 when %s is unset", async (name) => {
+    const res = await harness({ env: { [name]: "" } }).call("/api/admin/whoami", withToken(await accessToken()));
+    expect(res.status).toBe(500);
+    expect(await res.json()).toMatchObject({ error: "auth_misconfigured" });
   });
 });
