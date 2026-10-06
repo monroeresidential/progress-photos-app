@@ -78,8 +78,8 @@ export function mountManage(container: HTMLElement, getProject: () => ProjectSum
           } else if (res?.purged === false) {
             note = "Deleted. Cached copies may take a minute to disappear.";
           }
-          if (note) status.textContent = note;
-          else if (list.childElementCount === 0 && cursor === null) status.textContent = "No photos yet.";
+          const empty = list.childElementCount === 0 && cursor === null;
+          status.textContent = [note, empty ? "No photos yet." : ""].filter(Boolean).join(" ");
         }),
     }, "Delete");
 
