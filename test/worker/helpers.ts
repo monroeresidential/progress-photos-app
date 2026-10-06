@@ -2,7 +2,9 @@ import { createExecutionContext } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { exportJWK, generateKeyPair, SignJWT, type JWK } from "jose";
 import { createApp } from "../../src/worker/app";
+import type { FeedPage } from "../../src/shared/types";
 import type { Env } from "../../src/worker/env";
+import { ulid } from "../../src/worker/ulid";
 
 export const TEST_BASE = "https://progress.test";
 
@@ -81,4 +83,42 @@ export function harness(opts: HarnessOptions = {}) {
     return call(path, { ...init, headers });
   };
   return { call, admin, fetchCalls, env: e };
+}
+
+export function randomHex(bytes = 32): string {
+  return [...crypto.getRandomValues(new Uint8Array(bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export async function seedProject(o: { origins?: string[]; name?: string } = {}): Promise<string> {
+  const slug = `p-${crypto.randomUUID().slice(0, 8)}`;
+  await env.DB.prepare("INSERT INTO projects (slug, name, site_url, allowed_origins, created_at) VALUES (?, ?, ?, ?, ?)")
+    .bind(slug, o.name ?? `Project ${slug}`, `https://${slug}.example/progress/`, JSON.stringify(o.origins ?? ["https://site.example"]), new Date().toISOString())
+    .run();
+  return slug;
+}
+
+export async function seedPhoto(
+  slug: string,
+  o: { id?: string; takenAt?: string; hidden?: boolean; caption?: string | null; fingerprint?: string; widths?: number[] } = {},
+): Promise<string> {
+  const id = o.id ?? ulid();
+  const takenAt = o.takenAt ?? "2026-10-01T12:00:00-05:00";
+  await env.DB.prepare(
+    "INSERT INTO photos (id, project_slug, taken_at, taken_utc, uploaded_at, uploaded_by, caption, width, height, widths, fingerprint, hidden) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  )
+    .bind(id, slug, takenAt, new Date(takenAt).toISOString(), new Date().toISOString(), "seed@example.com", o.caption ?? null, 1920, 1440, JSON.stringify(o.widths ?? [480, 960, 1920]), o.fingerprint ?? randomHex(), o.hidden ? 1 : 0)
+    .run();
+  return id;
+}
+
+export async function allFeedPages(call: (path: string) => Promise<Response>, path: string): Promise<FeedPage[]> {
+  const pages: FeedPage[] = [];
+  let cursor: string | null = null;
+  do {
+    const res = await call(cursor ? `${path}${path.includes("?") ? "&" : "?"}cursor=${cursor}` : path);
+    const page = (await res.json()) as FeedPage;
+    pages.push(page);
+    cursor = page.nextCursor;
+  } while (cursor);
+  return pages;
 }

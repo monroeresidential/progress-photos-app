@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { createAccessVerifier, requireAccess } from "./access";
 import type { AppEnv, Deps } from "./env";
 import { HttpError } from "./http";
+import { registerFeed } from "./routes/feed";
+import { registerImages } from "./routes/img";
 
 export function createApp(deps: Deps) {
   const app = new Hono<AppEnv>();
@@ -12,6 +14,9 @@ export function createApp(deps: Deps) {
   });
   app.use("/api/admin/*", requireAccess(createAccessVerifier(deps.fetch)));
   app.get("/api/admin/whoami", (c) => c.json({ email: c.var.email }));
+
+  registerFeed(app, deps);
+  registerImages(app, deps);
 
   app.notFound((c) => c.json({ error: "not_found", message: "Not found" }, 404));
   app.onError((err, c) => {
