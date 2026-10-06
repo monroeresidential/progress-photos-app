@@ -61,3 +61,25 @@ test("uploads a photo, flags a re-upload as duplicate, and manages it", async ({
   await page.getByRole("button", { name: "Delete" }).first().click();
   await expect(page.getByText("No photos yet.")).toBeVisible();
 });
+
+test("each batch starts with an empty caption and a fresh list", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Project").selectOption("e2e-upload");
+  const pick = page.locator('input[type="file"]');
+  const batchCaption = page.getByLabel("Caption for this batch");
+
+  await pick.setInputFiles({ name: "a.jpg", mimeType: "image/jpeg", buffer: await makeJpeg(page, `a ${Date.now()}`) });
+  await batchCaption.fill("Batch one");
+  await page.getByRole("button", { name: "Upload" }).click();
+  await expect(page.locator(".status-text")).toHaveText(["Done"], { timeout: 60_000 });
+  await expect(batchCaption).toHaveValue("");
+
+  await pick.setInputFiles({ name: "b.jpg", mimeType: "image/jpeg", buffer: await makeJpeg(page, `b ${Date.now()}`) });
+  await expect(page.locator(".status-text")).toHaveText(["Ready"]); // the finished batch is gone
+  await page.getByRole("button", { name: "Upload" }).click();
+  await expect(page.locator(".status-text")).toHaveText(["Done"], { timeout: 60_000 });
+
+  const admin = await (await page.request.get("/api/admin/photos?project=e2e-upload")).json();
+  expect(admin.photos.map((p: { caption: string | null }) => p.caption).sort()).toEqual(["Batch one", null].sort());
+  for (const p of admin.photos) await page.request.delete(`/api/admin/photos/${p.id}`);
+});

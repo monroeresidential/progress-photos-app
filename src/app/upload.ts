@@ -57,6 +57,11 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     uploadBtn.disabled = running || !items.some((i) => i.status === "ready");
   }
 
+  /** A batch is finished once nothing in it is waiting to upload or to be retried. */
+  function batchFinished(): boolean {
+    return items.length > 0 && items.every((i) => i.status === "done" || i.status === "duplicate" || i.status === "unreadable");
+  }
+
   function setStatus(item: Item, status: Status, detail?: string): void {
     item.status = status;
     item.statusText.textContent = detail ? `${LABEL[status]} — ${detail}` : LABEL[status];
@@ -70,6 +75,12 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
   async function addFiles(): Promise<void> {
     const files = [...(fileInput.files ?? [])];
     fileInput.value = "";
+    if (files.length === 0) return;
+    if (batchFinished()) {
+      // Start a new batch: drop the finished one so its photos and summary don't carry over.
+      for (const item of items) item.li.remove();
+      items.length = 0;
+    }
     summary.textContent = "";
     const added = files.map((file) => {
       const item = {
@@ -104,12 +115,12 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     }
   }
 
-  async function uploadOne(item: Item, project: ProjectSummary): Promise<void> {
+  async function uploadOne(item: Item, project: ProjectSummary, batch: string): Promise<void> {
     setStatus(item, "working");
     item.progress.value = 0;
     try {
       item.processed ??= await processPhoto(item.file);
-      const caption = item.caption.value.trim() || batchCaption.value.trim();
+      const caption = item.caption.value.trim() || batch;
       const res = await uploadPhoto(project.slug, item.processed, caption, (f) => (item.progress.value = f));
       item.processed = undefined;
       setStatus(item, res.duplicate ? "duplicate" : "done");
@@ -127,9 +138,10 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     onRunningChange?.(true);
     refresh();
     const project = getProject();
+    const batch = batchCaption.value.trim(); // fixed for this run, even if the field is edited mid-upload
     let next: Item | undefined;
     while ((next = items.find((i) => i.status === "ready"))) {
-      await uploadOne(next, project);
+      await uploadOne(next, project, batch);
       if (next.status === "signin") {
         notice.hidden = false;
         break;
@@ -139,6 +151,7 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     onRunningChange?.(false);
     refresh();
     const published = items.filter((i) => i.status === "done" || i.status === "duplicate").length;
+    if (batchFinished()) batchCaption.value = "";
     summary.replaceChildren(`${published} of ${items.length} published. `, (safeHttp(project.siteUrl) ? h("a", { href: project.siteUrl, target: "_blank", rel: "noopener" }, "View on site") : ""));
   }
 }
