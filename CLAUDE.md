@@ -2,14 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Current state
+## Commands
 
-Pre-implementation. The only content is the design spec at
-`docs/specs/2026-10-06-progress-photos-design.md` — read it before making
-changes; it is the source of truth for routes, schema, validation limits and
-error behaviour. No `package.json`, Wrangler config or tests exist yet, so
-there are no build/test commands to run. When scaffolding adds them, update
-this file with the real commands (including how to run a single Vitest test).
+- `npm test` — unit (Node) + Worker (workerd) tests. `npm run test:unit` / `npm run test:worker` for one suite.
+- Single test: `npx vitest run --config vitest.worker.config.ts test/worker/feed.test.ts -t "orders by instant"` (use `vitest.unit.config.ts` for `test/unit/*`).
+- `npm run typecheck` — two tsconfigs: `tsconfig.worker.json` (workers-types, no DOM) and `tsconfig.app.json` (DOM + Node, for PWA, embed, scripts, unit/e2e tests). Don't merge them; workers-types and lib.dom conflict.
+- `npm run build` — PWA + embed into `dist/app` (served by Workers Static Assets).
+- `npm run dev` — build, then `wrangler dev` on :8787. Put `DEV_AUTH_EMAIL=…` in `.dev.vars` to use the upload app locally (honored on localhost only).
+- `npm run test:e2e` — Playwright against `npm run e2e:server` (fresh seeded local D1 in `.wrangler/e2e`).
+
+The design spec is `docs/specs/2026-10-06-progress-photos-design.md`; the implementation plan (with deliberate deviations from the spec) is `docs/superpowers/plans/2026-10-06-progress-photos.md`.
 
 Commands the spec commits to (not yet implemented):
 - `npm run project:add -- <slug> "<name>" <site_url> <origin>…` — parameterised D1 insert via Wrangler; the only way projects are created (no UI).

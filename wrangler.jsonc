@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "progress-photos",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "routes": [{ "pattern": "progress.monroeresidential.com", "custom_domain": true }],
+  "assets": {
+    "directory": "./dist/app",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/img/*"]
+  },
+  "vars": {
+    "ACCESS_TEAM_DOMAIN": "SET-IN-TASK-13.cloudflareaccess.com",
+    "ACCESS_AUD": "SET-IN-TASK-13",
+    "PUBLIC_BASE_URL": "https://progress.monroeresidential.com",
+    "CF_ZONE_ID": "SET-IN-TASK-13"
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "progress-photos", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
+  ],
+  "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "progress-photos" }],
+  "env": {
+    "staging": {
+      "routes": [{ "pattern": "progress-staging.monroeresidential.com", "custom_domain": true }],
+      "vars": {
+        "ACCESS_TEAM_DOMAIN": "SET-IN-TASK-13.cloudflareaccess.com",
+        "ACCESS_AUD": "SET-IN-TASK-13",
+        "PUBLIC_BASE_URL": "https://progress-staging.monroeresidential.com",
+        "CF_ZONE_ID": "SET-IN-TASK-13"
+      },
+      "d1_databases": [
+        { "binding": "DB", "database_name": "progress-photos-staging", "database_id": "00000000-0000-0000-0000-000000000001", "migrations_dir": "migrations" }
+      ],
+      "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "progress-photos-staging" }]
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "progress-photos-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "npm run build && wrangler dev --port 8787 --var PUBLIC_BASE_URL:http://localhost:8787",
+    "dev:app": "vite",
+    "build": "vite build && vite build --config vite.embed.config.ts",
+    "typecheck": "tsc -p tsconfig.worker.json && tsc -p tsconfig.app.json",
+    "test": "npm run test:unit && npm run test:worker",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "pretest:worker": "node -e \"require('node:fs').mkdirSync('dist/app',{recursive:true})\"",
+    "test:worker": "vitest run --config vitest.worker.config.ts",
+    "test:e2e": "playwright test",
+    "e2e:server": "npm run build && node scripts/seed-e2e.ts && wrangler dev --port 8787 --persist-to .wrangler/e2e --var PUBLIC_BASE_URL:http://localhost:8787 --var DEV_AUTH_EMAIL:e2e@example.com",
+    "db:migrate:local": "wrangler d1 migrations apply progress-photos --local",
+    "project:add": "node scripts/project-add.ts",
+    "cleanup:orphans": "node scripts/cleanup-orphans.ts",
+    "icons": "node scripts/make-icons.ts",
+    "embed:release": "node scripts/embed-release.ts"
+  },
+  "dependencies": {
+    "@jsquash/webp": "^1.5.0",
+    "hono": "^4.13.13",
+    "jose": "^6.2.12"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^5.20261006.1",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^24.19.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.3",
+    "vitest": "~4.1",
+    "wrangler": "^4.147.0"
+  }
+}
