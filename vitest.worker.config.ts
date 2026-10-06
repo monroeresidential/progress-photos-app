@@ -8,8 +8,7 @@ export default defineConfig(async () => {
       cloudflareTest({
         main: "./src/worker/index.ts",
         wrangler: { configPath: "./wrangler.jsonc" },
-        // The pool bundles an older workerd than wrangler; cap the date it can run.
-        miniflare: { compatibilityDate: "2026-08-22", bindings: { TEST_MIGRATIONS: migrations } },
+        miniflare: { bindings: { TEST_MIGRATIONS: migrations } },
       }),
     ],
     test: {
