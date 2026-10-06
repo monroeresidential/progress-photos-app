@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { inflateSync } from "node:zlib";
 import { openHost } from "./host";
 
 const feed = (page: import("@playwright/test").Page) => page.locator("progress-feed");
@@ -58,6 +59,102 @@ test("viewer: open, arrow keys, Escape, focus returns", async ({ page, browserNa
   await page.keyboard.press("Escape");
   await expect(overlay).toBeHidden();
   await expect(second).toBeFocused();
+});
+
+// Seeded ids (scripts/seed-e2e.ts): feed index i is seed n = 11 - i on the newest day.
+const seedId = (n: number) => `01J9E2E00000000000000000${"0123456789ABCDEFGHJKMNPQRSTVWXYZ"[Math.floor(n / 32)]}${"0123456789ABCDEFGHJKMNPQRSTVWXYZ"[n % 32]}`;
+const PHOTO = [0, 1, 2, 3].map((i) => seedId(11 - i));
+
+type RGB = [number, number, number];
+const RED: RGB = [220, 30, 30];
+const GREEN: RGB = [30, 200, 30];
+const BLUE: RGB = [30, 30, 220];
+
+/** RGB of the top-left pixel of a PNG (every PNG filter leaves the first pixel's bytes raw). */
+function firstPixel(png: Buffer): RGB {
+  const idat: Buffer[] = [];
+  for (let o = 8; o < png.length; ) {
+    const len = png.readUInt32BE(o);
+    if (png.toString("ascii", o + 4, o + 8) === "IDAT") idat.push(png.subarray(o + 8, o + 8 + len));
+    o += 12 + len;
+  }
+  const raw = inflateSync(Buffer.concat(idat));
+  return [raw[1]!, raw[2]!, raw[3]!];
+}
+
+const near = (a: RGB, b: RGB) => a.every((v, i) => Math.abs(v - b[i]!) < 40);
+
+/** Samples the screen pixel at the centre of the viewer image for `ms`; counts frames showing `color`. */
+async function sightings(page: import("@playwright/test").Page, color: RGB, ms: number): Promise<number> {
+  const img = page.locator("progress-feed").locator(".viewer-img");
+  let seen = 0;
+  for (const end = Date.now() + ms; Date.now() < end; ) {
+    const box = await img.boundingBox();
+    if (box && box.width > 0 && box.height > 0) {
+      const shot = await page.screenshot({ clip: { x: box.x + box.width / 2, y: box.y + box.height / 2, width: 1, height: 1 } });
+      if (near(firstPixel(shot), color)) seen++;
+    }
+    await page.waitForTimeout(40);
+  }
+  return seen;
+}
+
+test("viewer never shows the previous photo while the next one loads", async ({ page }) => {
+  await openHost(page, {
+    project: "e2e-feed",
+    imageDelayMs: (url) => (url.includes(PHOTO[3]!) ? 2000 : 0),
+    imageColor: (url) => (url.includes(PHOTO[0]!) ? RED : url.includes(PHOTO[3]!) ? BLUE : undefined),
+  });
+  await feed(page).locator(".open").nth(0).click();
+  await expect.poll(() => sightings(page, RED, 100)).toBeGreaterThan(0); // photo 0 on screen
+  await page.keyboard.press("Escape");
+
+  await feed(page).locator(".open").nth(3).click();
+  // Photo 3 takes 2 s to arrive; photo 0 must not be on screen at any point meanwhile.
+  expect(await sightings(page, RED, 1200)).toBe(0);
+  await expect.poll(() => sightings(page, BLUE, 100), { timeout: 10_000 }).toBeGreaterThan(0);
+});
+
+test("viewer: rapid steps never reveal an earlier photo over a newer one", async ({ page }) => {
+  await openHost(page, {
+    project: "e2e-feed",
+    imageDelayMs: (url) => (url.includes(PHOTO[2]!) ? 2000 : 0),
+    imageColor: (url) => (url.includes(PHOTO[1]!) ? GREEN : url.includes(PHOTO[2]!) ? BLUE : undefined),
+  });
+  await feed(page).locator(".open").nth(0).click();
+  await expect(feed(page).locator(".viewer-stage")).not.toHaveClass(/loading/);
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight"); // lands on the slow photo before the previous one is shown
+  expect(await sightings(page, GREEN, 1200)).toBe(0);
+  await expect.poll(() => sightings(page, BLUE, 100), { timeout: 10_000 }).toBeGreaterThan(0);
+});
+
+test("viewer: counter and large SVG arrows", async ({ page }) => {
+  await openHost(page, { project: "e2e-feed" });
+  await feed(page).locator(".open").first().click();
+  const counter = feed(page).locator(".viewer-counter");
+  await expect(counter).toHaveText(/^1 \/ \d+\+?$/);
+  await page.keyboard.press("ArrowRight");
+  await expect(counter).toHaveText(/^2 \/ \d+\+?$/);
+  for (const cls of [".prev", ".next", ".close"]) {
+    const button = feed(page).locator(`.overlay ${cls}`);
+    await expect(button.locator("svg")).toBeAttached();
+    const box = (await button.boundingBox())!;
+    expect(box.width).toBeGreaterThanOrEqual(56);
+    expect(box.height).toBeGreaterThanOrEqual(56);
+  }
+  await expect(feed(page).locator(".overlay .next")).toHaveCSS("background-color", "rgba(0, 0, 0, 0.6)");
+});
+
+test("viewer: counter shows the total once every page has loaded", async ({ page }) => {
+  await openHost(page, { project: "e2e-feed" });
+  for (let i = 0; i < 20 && !(await feed(page).locator(".end").isVisible()); i++) {
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.waitForTimeout(150);
+  }
+  await expect(feed(page).locator(".photo")).toHaveCount(60);
+  await feed(page).locator(".open").first().click();
+  await expect(feed(page).locator(".viewer-counter")).toHaveText("1 / 60");
 });
 
 test("viewer: swipe moves between photos", async ({ page }) => {

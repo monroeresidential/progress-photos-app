@@ -10,23 +10,48 @@ export interface ViewerSource {
 }
 
 const SWIPE_PX = 50;
+const SVG_NS = "http://www.w3.org/2000/svg";
 
-function button(cls: string, label: string, text: string): HTMLButtonElement {
+/** Stroke icon drawn in currentColor, so it follows the button's (themable) color. */
+function icon(path: string): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const p = document.createElementNS(SVG_NS, "path");
+  p.setAttribute("d", path);
+  svg.append(p);
+  return svg;
+}
+
+function button(cls: string, label: string, path: string): HTMLButtonElement {
   const b = document.createElement("button");
   b.type = "button";
   b.className = cls;
   b.setAttribute("aria-label", label);
-  b.textContent = text;
+  b.append(icon(path));
   return b;
+}
+
+function node<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string): HTMLElementTagNameMap[K] {
+  const e = document.createElement(tag);
+  e.className = cls;
+  return e;
 }
 
 export class Viewer {
   readonly element = document.createElement("div");
-  #img = document.createElement("img");
-  #caption = document.createElement("figcaption");
-  #close = button("close", "Close", "✕");
-  #prev = button("prev", "Previous photo", "‹");
-  #next = button("next", "Next photo", "›");
+  #stage = node("div", "viewer-stage loading");
+  #img = node("img", "viewer-img");
+  #caption = node("figcaption", "viewer-caption");
+  #counter = node("span", "viewer-counter");
+  #captionText = node("span", "viewer-caption-text");
+  #close = button("close", "Close", "M6 6l12 12M18 6L6 18");
+  #prev = button("prev", "Previous photo", "M15 5l-7 7 7 7");
+  #next = button("next", "Next photo", "M9 5l7 7-7 7");
+  /** Neighbours being fetched ahead of time; held so they aren't garbage-collected mid-load. */
+  #preloads: HTMLImageElement[] = [];
+  /** Increments per render so a slow earlier image can't reveal itself over a newer one. */
+  #renderId = 0;
   #index = -1;
   #startX: number | null = null;
   #swiped = false;
@@ -44,10 +69,12 @@ export class Viewer {
     el.setAttribute("role", "dialog");
     el.setAttribute("aria-modal", "true");
     el.setAttribute("aria-label", "Photo viewer");
-    this.#img.className = "viewer-img";
-    this.#caption.className = "viewer-caption";
+    this.#img.decoding = "async";
+    this.#stage.append(this.#img, node("span", "viewer-spinner"));
+    this.#counter.setAttribute("aria-live", "polite");
+    this.#caption.append(this.#counter, this.#captionText);
     const figure = document.createElement("figure");
-    figure.append(this.#img, this.#caption);
+    figure.append(this.#stage, this.#caption);
     el.append(figure, this.#prev, this.#next, this.#close);
 
     this.#close.addEventListener("click", () => this.close());
@@ -100,6 +127,11 @@ export class Viewer {
     if (!this.isOpen) return;
     const i = this.#index;
     this.#index = -1;
+    this.#renderId++; // any load still in flight must not reveal anything
+    this.#stage.classList.add("loading");
+    this.#img.removeAttribute("srcset");
+    this.#img.removeAttribute("src");
+    this.#preloads = [];
     this.element.hidden = true;
     document.documentElement.style.overflow = this.#savedOverflow;
     if (restoreFocus) this.src.opener(i)?.focus();
@@ -120,7 +152,10 @@ export class Viewer {
   #render(): void {
     const p = this.src.photo(this.#index);
     if (!p) return;
+    const id = ++this.#renderId;
     const img = this.#img;
+    // Hide first, synchronously: the previous photo must never show while the new one loads.
+    this.#stage.classList.add("loading");
     img.removeAttribute("srcset");
     img.width = p.width;
     img.height = p.height;
@@ -128,13 +163,36 @@ export class Viewer {
     img.sizes = "100vw";
     img.srcset = srcsetAttr(p.srcset);
     img.src = largestSrc(p.srcset);
-    this.#caption.textContent = p.caption ?? "";
+    const reveal = () => {
+      if (id === this.#renderId) this.#stage.classList.remove("loading");
+    };
+    // decode() resolves once the new image is ready to paint; on failure, reveal anyway so
+    // the browser's broken-image state (and alt text) shows instead of an endless spinner.
+    img.decode().then(reveal, reveal);
+    this.#preloadNeighbours();
+
+    this.#captionText.textContent = p.caption ?? "";
+    this.#counter.textContent = `${this.#index + 1} / ${this.src.count()}${this.src.hasMore() ? "+" : ""}`;
     const prevOff = this.#index === 0;
     const nextOff = this.#index >= this.src.count() - 1 && !this.src.hasMore();
     const active = this.root.activeElement;
     if ((prevOff && active === this.#prev) || (nextOff && active === this.#next)) this.#close.focus();
     this.#prev.disabled = prevOff;
     this.#next.disabled = nextOff;
+  }
+
+  /** Start fetching the photos either side so stepping is instant. */
+  #preloadNeighbours(): void {
+    this.#preloads = [this.#index - 1, this.#index + 1].flatMap((i) => {
+      const p = i >= 0 ? this.src.photo(i) : undefined;
+      if (!p) return [];
+      const pre = new Image();
+      pre.decoding = "async";
+      pre.sizes = "100vw";
+      pre.srcset = srcsetAttr(p.srcset);
+      pre.src = largestSrc(p.srcset);
+      return [pre];
+    });
   }
 
   #onKey(e: KeyboardEvent): void {

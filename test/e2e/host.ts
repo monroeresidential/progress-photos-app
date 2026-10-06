@@ -6,11 +6,23 @@ const IMAGE = solidPng(480, 360, [180, 120, 90]);
 /** Opens a page on http://host.test (an allowed origin) that embeds the feed from localhost:8787. */
 export async function openHost(
   page: Page,
-  o: { project: string; style?: string; fallback?: string; delayImages?: Promise<void> },
+  o: {
+    project: string;
+    style?: string;
+    fallback?: string;
+    delayImages?: Promise<void>;
+    imageDelayMs?: (url: string) => number;
+    /** Paint specific photos a distinct solid colour, so tests can tell them apart on screen. */
+    imageColor?: (url: string) => [number, number, number] | undefined;
+  },
 ): Promise<void> {
   await page.route("**/img/**", async (route) => {
     await o.delayImages;
-    await route.fulfill({ contentType: "image/png", body: IMAGE });
+    const url = route.request().url();
+    const ms = o.imageDelayMs?.(url) ?? 0;
+    if (ms > 0) await new Promise((r) => setTimeout(r, ms));
+    const color = o.imageColor?.(url);
+    await route.fulfill({ contentType: "image/png", body: color ? solidPng(480, 360, color) : IMAGE });
   });
   await page.route("http://host.test/**", (route) =>
     route.fulfill({
