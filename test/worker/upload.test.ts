@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FIND_BY_FINGERPRINT } from "../../src/worker/photos";
-import { fakeWebp, harness, listKeys, randomHex, seedPhoto, seedProject, uploadForm } from "./helpers";
+import { feedUrl } from "../../src/worker/urls";
+import { fakeWebp, harness, listKeys, randomHex, seedPhoto, seedProject, TEST_BASE, uploadForm } from "./helpers";
 
 const post = (h: ReturnType<typeof harness>, form: FormData) => h.admin("/api/admin/photos", { method: "POST", body: form });
 
@@ -33,6 +34,22 @@ describe("POST /api/admin/photos", () => {
     const res = await post(harness(), uploadForm({ project: slug, width: 400, height: 300, files: { w400: fakeWebp(400, 300) } }));
     expect(res.status).toBe(201);
     expect(await listKeys(`${slug}/`)).toHaveLength(1);
+  });
+
+  it("purges the first feed page after a new upload, and not after a duplicate", async () => {
+    const slug = await seedProject();
+    const fingerprint = randomHex();
+    const h = harness({ env: { CF_PURGE_TOKEN: "t" } });
+    expect((await post(h, uploadForm({ project: slug, fingerprint }))).status).toBe(201);
+    await h.settle();
+    const purges = h.fetchCalls.filter((r) => r.url.startsWith("https://api.cloudflare.com/"));
+    expect(purges).toHaveLength(1);
+    expect(await purges[0]!.json()).toEqual({ files: [feedUrl(TEST_BASE, slug)] });
+
+    const h2 = harness({ env: { CF_PURGE_TOKEN: "t" } });
+    expect((await post(h2, uploadForm({ project: slug, fingerprint }))).status).toBe(200);
+    await h2.settle();
+    expect(h2.fetchCalls.filter((r) => r.url.startsWith("https://api.cloudflare.com/"))).toHaveLength(0);
   });
 
   it("returns the existing id for a repeated fingerprint and stores nothing new", async () => {

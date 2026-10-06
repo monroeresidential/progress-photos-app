@@ -1,4 +1,4 @@
-import { createExecutionContext } from "cloudflare:test";
+import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { exportJWK, generateKeyPair, SignJWT, type JWK } from "jose";
 import { createApp } from "../../src/worker/app";
@@ -81,14 +81,22 @@ export function harness(opts: HarnessOptions = {}) {
     now: () => opts.now ?? Date.now(),
   });
   const e = testEnv(opts.env);
-  const call = async (path: string, init?: RequestInit, base = TEST_BASE) =>
-    app.fetch(new Request(base + path, init), e, createExecutionContext());
+  const ctxs: ExecutionContext[] = [];
+  const call = async (path: string, init?: RequestInit, base = TEST_BASE) => {
+    const ctx = createExecutionContext();
+    ctxs.push(ctx);
+    return app.fetch(new Request(base + path, init), e, ctx);
+  };
+  /** Waits for every waitUntil promise from calls made so far. */
+  const settle = async () => {
+    for (const ctx of ctxs) await waitOnExecutionContext(ctx);
+  };
   const admin = async (path: string, init: RequestInit = {}) => {
     const headers = new Headers(init.headers);
     headers.set("Cf-Access-Jwt-Assertion", await accessToken());
     return call(path, { ...init, headers });
   };
-  return { call, admin, fetchCalls, env: e };
+  return { call, admin, settle, fetchCalls, env: e };
 }
 
 export function randomHex(bytes = 32): string {

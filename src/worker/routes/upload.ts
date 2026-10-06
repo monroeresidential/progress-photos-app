@@ -6,7 +6,8 @@ import { badRequest, HttpError } from "../http";
 import { findByFingerprint, insertPhoto } from "../photos";
 import { getProject } from "../projects";
 import { ulid } from "../ulid";
-import { imageKey } from "../urls";
+import { purgeUrls } from "../purge";
+import { feedUrl, imageKey } from "../urls";
 import { readWebpSize } from "../webp";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -70,6 +71,11 @@ export function registerUpload(app: App, deps: Deps): void {
 
     const id = ulid(now);
     const keys = files.map((f) => imageKey(slug, id, f.width));
+    // The edge may hold the first feed page for a minute; drop it so the new photo shows up.
+    const created = () => {
+      c.executionCtx.waitUntil(purgeUrls(deps.fetch, c.env, [feedUrl(c.env.PUBLIC_BASE_URL, slug)]));
+      return c.json({ id }, 201);
+    };
     const cleanup = async () => {
       try {
         await c.env.PHOTOS.delete(keys);
@@ -104,11 +110,11 @@ export function registerUpload(app: App, deps: Deps): void {
         throw err;
       }
       // The insert may have committed even though the call failed: keep our own images.
-      if (dup?.id === id) return c.json({ id }, 201);
+      if (dup?.id === id) return created();
       await cleanup();
       if (dup) return c.json({ id: dup.id, duplicate: true }, 200);
       throw err;
     }
-    return c.json({ id }, 201);
+    return created();
   });
 }
