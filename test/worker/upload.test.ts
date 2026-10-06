@@ -128,4 +128,37 @@ describe("POST /api/admin/photos", () => {
     expect(await res.json()).toEqual({ id: existing, duplicate: true });
     expect(await listKeys(`${slug}/`)).toEqual([]);
   });
+
+  it("keeps the R2 objects and returns 201 when the insert commits but the call throws", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const slug = await seedProject();
+    const lossyDb = new Proxy(env.DB, {
+      get(target, prop) {
+        if (prop === "prepare") {
+          return (sql: string) => {
+            const stmt = target.prepare(sql);
+            if (!sql.startsWith("INSERT INTO photos")) return stmt;
+            return {
+              bind: (...args: unknown[]) => {
+                const bound = stmt.bind(...args);
+                return {
+                  run: async () => {
+                    await bound.run();
+                    throw new Error("response lost");
+                  },
+                };
+              },
+            } as unknown as D1PreparedStatement;
+          };
+        }
+        const v = Reflect.get(target, prop);
+        return typeof v === "function" ? v.bind(target) : v;
+      },
+    });
+    const res = await post(harness({ env: { DB: lossyDb } }), uploadForm({ project: slug }));
+    expect(res.status).toBe(201);
+    const { id } = (await res.json()) as { id: string };
+    expect(await env.DB.prepare("SELECT id FROM photos WHERE id = ?").bind(id).first()).toEqual({ id });
+    expect(await listKeys(`${slug}/`)).toHaveLength(3);
+  });
 });

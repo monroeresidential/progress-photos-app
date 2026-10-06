@@ -5,6 +5,7 @@ import { HttpError } from "./http";
 import { registerFeed } from "./routes/feed";
 import { registerImages } from "./routes/img";
 import { registerUpload } from "./routes/upload";
+import { requireSameOrigin } from "./same-origin";
 
 export function createApp(deps: Deps) {
   const app = new Hono<AppEnv>();
@@ -13,6 +14,7 @@ export function createApp(deps: Deps) {
     c.header("Cache-Control", "no-store");
     await next();
   });
+  app.use("/api/admin/*", requireSameOrigin());
   app.use("/api/admin/*", requireAccess(createAccessVerifier(deps.fetch)));
   app.get("/api/admin/whoami", (c) => c.json({ email: c.var.email }));
 

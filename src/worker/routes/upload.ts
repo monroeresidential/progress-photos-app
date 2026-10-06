@@ -70,8 +70,17 @@ export function registerUpload(app: App, deps: Deps): void {
 
     const id = ulid(now);
     const keys = files.map((f) => imageKey(slug, id, f.width));
+    const cleanup = async () => {
+      try {
+        await c.env.PHOTOS.delete(keys);
+      } catch (e) {
+        console.error("R2 cleanup failed", e);
+      }
+    };
     try {
-      await Promise.all(files.map((f, i) => c.env.PHOTOS.put(keys[i]!, f.bytes, { httpMetadata: { contentType: "image/webp" } })));
+      const puts = await Promise.allSettled(files.map((f, i) => c.env.PHOTOS.put(keys[i]!, f.bytes, { httpMetadata: { contentType: "image/webp" } })));
+      const failed = puts.find((p): p is PromiseRejectedResult => p.status === "rejected");
+      if (failed) throw failed.reason;
       await insertPhoto(c.env.DB, {
         id,
         projectSlug: slug,
@@ -86,8 +95,17 @@ export function registerUpload(app: App, deps: Deps): void {
         fingerprint,
       });
     } catch (err) {
-      await c.env.PHOTOS.delete(keys);
-      const dup = await findByFingerprint(c.env.DB, slug, fingerprint);
+      let dup: { id: string } | null;
+      try {
+        dup = await findByFingerprint(c.env.DB, slug, fingerprint);
+      } catch (lookupErr) {
+        // Can't tell whether the row committed; an orphaned object is safer than a row with missing images.
+        console.error("Fingerprint lookup failed after upload error", lookupErr);
+        throw err;
+      }
+      // The insert may have committed even though the call failed: keep our own images.
+      if (dup?.id === id) return c.json({ id }, 201);
+      await cleanup();
       if (dup) return c.json({ id: dup.id, duplicate: true }, 200);
       throw err;
     }
