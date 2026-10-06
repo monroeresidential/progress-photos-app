@@ -1,10 +1,17 @@
 import { Hono } from "hono";
+import { createAccessVerifier, requireAccess } from "./access";
 import type { AppEnv, Deps } from "./env";
 import { HttpError } from "./http";
 
 export function createApp(deps: Deps) {
   const app = new Hono<AppEnv>();
-  void deps; // routes registered in later tasks use deps
+
+  app.use("/api/admin/*", async (c, next) => {
+    c.header("Cache-Control", "no-store");
+    await next();
+  });
+  app.use("/api/admin/*", requireAccess(createAccessVerifier(deps.fetch)));
+  app.get("/api/admin/whoami", (c) => c.json({ email: c.var.email }));
 
   app.notFound((c) => c.json({ error: "not_found", message: "Not found" }, 404));
   app.onError((err, c) => {
