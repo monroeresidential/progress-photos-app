@@ -10,12 +10,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run build` — PWA + embed into `dist/app` (served by Workers Static Assets).
 - `npm run dev` — build, then `wrangler dev` on :8787. Put `DEV_AUTH_EMAIL=…` in `.dev.vars` to use the upload app locally (honored on localhost only).
 - `npm run test:e2e` — Playwright against `npm run e2e:server` (fresh seeded local D1 in `.wrangler/e2e`).
+- Operator commands (`project:add`, `cleanup:orphans`, `embed:release`), setup and local-dev gotchas are in `README.md`.
+- Deploys: push to `main` → staging (`.github/workflows/ci.yml`); production is the manual "Deploy production" workflow. Real iPhone checks: `docs/iphone-checklist.md`.
 
 The design spec is `docs/specs/2026-10-06-progress-photos-design.md`; the implementation plan (with deliberate deviations from the spec) is `docs/superpowers/plans/2026-10-06-progress-photos.md`.
-
-Commands the spec commits to (not yet implemented):
-- `npm run project:add -- <slug> "<name>" <site_url> <origin>…` — parameterised D1 insert via Wrangler; the only way projects are created (no UI).
-- `npm run cleanup:orphans` — lists R2 keys with no matching D1 row, deletes after confirmation.
 
 ## What this is
 
@@ -60,6 +58,12 @@ Playwright against `wrangler dev`, ULIDs for photo ids.
 - **Feed pagination is keyset** on `taken_at DESC, id DESC`, cursor =
   base64url of `taken_at|id`, page size 24, `hidden = 0` only. The admin list
   uses the same shape but includes hidden photos.
+- **`taken_utc` orders, `taken_at` displays.** Sorting/cursors use the UTC column; day headings use the date in `taken_at`'s own offset.
+- **The app is built by `createApp(deps)`** with injected `fetch` (JWKS, purge), `cache` and `now`; Worker tests call `app.fetch` directly via `test/worker/helpers.ts#harness` rather than `SELF`.
+- **Feed cache key = purge URL = `feedUrl(PUBLIC_BASE_URL, slug, cursor)`.** Change one and you break delete-time purging.
+- **Pinned embeds (`/embed/<version>.js`) keep calling `/api/feed`**, so the feed response shape must stay backward compatible.
+- **`/api/admin/*` middleware order:** no-store, then `requireSameOrigin` (`src/worker/same-origin.ts`: non-GET with a differing `Origin`, or `Sec-Fetch-Site` cross-site/same-site → 403 `cross_origin`), then `requireAccess` (500 `auth_misconfigured` if `ACCESS_AUD` or `ACCESS_TEAM_DOMAIN` is empty).
+- **`compatibility_date` stays at `2026-08-22`**, the max the test pool's workerd supports; `wrangler dev` scripts need `--local-upstream localhost:8787` for the `DEV_AUTH_EMAIL` bypass.
 - **CORS** on the feed echoes `Origin` only if it is in that project's
   `allowed_origins` JSON array.
 - Errors are always `{ "error": "<code>", "message": "<text>" }`.
