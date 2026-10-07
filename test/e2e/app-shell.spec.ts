@@ -4,10 +4,11 @@ test.skip(({ browserName }) => browserName !== "chromium", "app tests run in Chr
 
 test("header: project title, Live site link, and tab switching", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Monroe Residential Progress Photos" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "MRP Progress Photos" })).toBeVisible();
   await page.getByLabel("Project").selectOption("e2e-upload");
   await expect(page.locator(".project-picker .name")).toHaveText("E2E Upload");
   await expect(page.getByRole("link", { name: "Live site" })).toHaveAttribute("href", "http://host.test/progress/");
+  await expect(page.getByRole("link", { name: "Live site" })).toHaveText(""); // icon only
 
   await page.getByRole("tab", { name: "Manage" }).click();
   await expect(page.getByRole("tab", { name: "Manage" })).toHaveAttribute("aria-selected", "true");

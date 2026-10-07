@@ -20,13 +20,13 @@ describe("groupByDay", () => {
 
 describe("labels", () => {
   it("formats days", () => {
-    expect(dayLabel("2026-10-05", "en-US")).toBe("Monday, October 5");
+    expect(dayLabel("2026-10-05", "en-US")).toBe("Mon – Oct 5");
     expect(shortDayLabel("2026-10-05", "en-US")).toBe("Monday, Oct 5");
   });
 
-  it("counts photos and live ones", () => {
-    expect(dayCounts([photo("a", "2026-10-05T08:00:00-05:00"), photo("b", "2026-10-05T09:00:00-05:00", true)])).toBe("2 photos · 1 live");
-    expect(dayCounts([photo("a", "2026-10-05T08:00:00-05:00")])).toBe("1 photo · 1 live");
+  it("counts photos, and hidden ones only when there are some", () => {
+    expect(dayCounts([photo("a", "2026-10-05T08:00:00-05:00"), photo("b", "2026-10-05T09:00:00-05:00", true)])).toBe("2 photos · 1 hidden");
+    expect(dayCounts([photo("a", "2026-10-05T08:00:00-05:00")])).toBe("1 photo");
   });
 
   it("formats the wall-clock time from the photo's own offset", () => {

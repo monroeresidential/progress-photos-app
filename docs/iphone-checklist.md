@@ -23,7 +23,7 @@ Run on a real iPhone in Safari against https://progress-staging.monroeresidentia
 - [ ] **Take photo** opens the camera; **Library** opens the photo library.
 - [ ] Area: "+ Add" a new area, upload — the pill appears next time; tapping the selected pill clears it.
 - [ ] Queue shows the capture-time range; rows fade out on Done; the batch caption clears and the area stays.
-- [ ] Manage: day headers with "N photos · M live"; hidden photos dimmed with "Hidden from site".
+- [ ] Manage: one-line day headers ("Wed – Oct 7", "N photos", plus "· M hidden" when some are hidden); hidden photos dimmed with "Hidden from site".
 - [ ] Viewer: swipe between photos; Save caption; Hide/Unhide; Delete asks first and moves on.
 - [ ] Select: tick several, bulk Hide, bulk Caption, bulk Delete (one confirmation).
 - [ ] Tapping into "+ Add", a photo caption or the viewer caption doesn't zoom the page.

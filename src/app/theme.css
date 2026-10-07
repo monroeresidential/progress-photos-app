@@ -27,7 +27,7 @@ button, input, select { font: inherit; color: inherit; }
 
 /* Header */
 .app-header { display: flex; flex-direction: column; gap: 12px; padding: max(16px, env(safe-area-inset-top)) 20px 0; }
-.app-title { margin: 0; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 600; color: var(--brand); text-align: center; }
+.app-title { margin: 0; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 600; color: var(--brand); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .project-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
 .project-picker { position: relative; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
 .project-picker .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -94,9 +94,9 @@ section[role="tabpanel"] { flex: 1; display: flex; flex-direction: column; }
 
 /* Manage */
 .manage-body { display: flex; flex-direction: column; gap: 28px; padding: 22px 20px 24px; }
-.day-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-bottom: 8px; margin-bottom: 14px; border-bottom: 1px solid var(--divider); }
+.day-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; white-space: nowrap; padding-bottom: 8px; margin-bottom: 14px; border-bottom: 1px solid var(--divider); }
 .day-title { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
-.day-counts { font-size: 12px; opacity: .6; }
+.day-counts { flex-shrink: 0; font-size: 12px; opacity: .6; }
 .cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
 .card { display: flex; flex-direction: column; gap: 6px; }
 .card-photo { position: relative; display: block; width: 100%; padding: 0; border: 0; border-radius: 14px; overflow: hidden; aspect-ratio: 4 / 3; background: var(--fill); cursor: pointer; }
@@ -154,3 +154,5 @@ section[role="tabpanel"] { flex: 1; display: flex; flex-direction: column; }
 @media (pointer: coarse) {
   input, select, textarea { font-size: max(16px, 1em) !important; }
 }
+.live-link { color: var(--brand); }
+.live-link .icon { opacity: 1; }
