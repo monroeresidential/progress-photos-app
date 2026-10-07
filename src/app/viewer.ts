@@ -1,3 +1,4 @@
+import { photoAlt } from "../shared/alt";
 import { largestSrc, srcsetAttr } from "../shared/srcset";
 import type { AdminPhoto } from "../shared/types";
 import { api, deleteNote, errorMessage } from "./api";
@@ -6,6 +7,7 @@ import { h } from "./dom";
 import { icon } from "./icons";
 
 export interface ViewerOptions {
+  projectName: string;
   photos(): AdminPhoto[];
   index: number;
   hasMore(): boolean;
@@ -69,7 +71,7 @@ export function openViewer(o: ViewerOptions): void {
     // Hide first: the previous photo must never show while this one loads.
     stage.classList.add("loading");
     img.removeAttribute("srcset");
-    img.alt = p.caption ?? "Progress photo";
+    img.alt = photoAlt(o.projectName, p);
     img.sizes = "100vw";
     img.srcset = srcsetAttr(p.srcset);
     img.src = largestSrc(p.srcset);

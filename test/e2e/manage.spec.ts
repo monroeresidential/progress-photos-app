@@ -48,3 +48,7 @@ test("focus returns to the card's More actions button after Escape and after Hid
   await expect(page.locator(".day-counts").first()).toHaveText("2 photos · 0 live");
   await expect(more()).toBeFocused();
 });
+
+test("cards carry project – area – caption alt text", async ({ page }) => {
+  await expect(page.locator(".card-photo img").first()).toHaveAttribute("alt", "E2E Manage – 4th floor post demolition");
+});

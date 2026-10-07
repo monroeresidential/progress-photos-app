@@ -1,3 +1,4 @@
+import { photoAlt } from "../shared/alt";
 import { smallestSrc, srcsetAttr } from "../shared/srcset";
 import type { AdminPhoto, ProjectSummary } from "../shared/types";
 import { api, deleteNote, errorMessage } from "./api";
@@ -60,7 +61,7 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
 
   function card(p: AdminPhoto, index: number): HTMLLIElement {
     const selected = selection.has(p.id);
-    const img = h("img", { alt: p.caption ?? "Progress photo", loading: "lazy", decoding: "async" });
+    const img = h("img", { alt: photoAlt(o.getProject().name, p), loading: "lazy", decoding: "async" });
     img.sizes = "(min-width: 600px) 560px, 100vw";
     img.srcset = srcsetAttr(p.srcset);
     img.src = smallestSrc(p.srcset);
@@ -205,6 +206,7 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
 
   function view(index: number): void {
     openViewer({
+      projectName: o.getProject().name,
       photos: () => ordered,
       index,
       hasMore: () => cursor !== null,

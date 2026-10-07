@@ -107,6 +107,7 @@ export function toFeedPhoto(row: PhotoRow, base: string): FeedPhoto {
     id: row.id,
     takenAt: row.taken_at,
     caption: row.caption,
+    area: row.area ?? null,
     width: row.width,
     height: row.height,
     srcset: Object.fromEntries(photoWidths(row).map((w) => [String(w), imageUrl(base, row.project_slug, row.id, w)])),
@@ -114,5 +115,5 @@ export function toFeedPhoto(row: PhotoRow, base: string): FeedPhoto {
 }
 
 export function toAdminPhoto(row: PhotoRow, base: string): AdminPhoto {
-  return { ...toFeedPhoto(row, base), hidden: row.hidden === 1, area: row.area ?? null };
+  return { ...toFeedPhoto(row, base), hidden: row.hidden === 1 };
 }

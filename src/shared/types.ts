@@ -2,6 +2,7 @@ export interface FeedPhoto {
   id: string;
   takenAt: string;
   caption: string | null;
+  area: string | null;
   width: number;
   height: number;
   srcset: Record<string, string>;
@@ -9,7 +10,6 @@ export interface FeedPhoto {
 
 export interface AdminPhoto extends FeedPhoto {
   hidden: boolean;
-  area: string | null;
 }
 
 export interface AreaCount {

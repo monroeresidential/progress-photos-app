@@ -1,5 +1,6 @@
 import { smallestSrc, srcsetAttr } from "../shared/srcset";
 import type { FeedPage, FeedPhoto } from "../shared/types";
+import { photoAlt } from "../shared/alt";
 import { dayKey, formatDay } from "./days";
 import { STYLES } from "./styles";
 import { Viewer } from "./viewer";
@@ -15,6 +16,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string): HTMLEle
 
 export class ProgressFeed extends HTMLElement {
   #shadow = this.attachShadow({ mode: "open" });
+  #projectName = "";
   #days = el("div", "days");
   #status = el("div", "status");
   #sentinel = el("div", "sentinel");
@@ -40,6 +42,7 @@ export class ProgressFeed extends HTMLElement {
     hasMore: () => !this.#done,
     loadMore: () => this.loadMore(),
     opener: (i) => this.#buttons[i],
+    projectName: () => this.#projectName,
   });
 
   connectedCallback(): void {
@@ -85,6 +88,7 @@ export class ProgressFeed extends HTMLElement {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const page = (await res.json()) as FeedPage;
+      this.#projectName = page.project.name;
       for (const p of page.photos) this.#append(p);
       this.#cursor = page.nextCursor;
       this.#done = page.nextCursor === null;
@@ -130,7 +134,7 @@ export class ProgressFeed extends HTMLElement {
     img.decoding = "async";
     img.width = p.width;
     img.height = p.height;
-    img.alt = p.caption ?? "Construction progress photo";
+    img.alt = photoAlt(this.#projectName, p);
     img.sizes = SIZES;
     img.srcset = srcsetAttr(p.srcset);
     img.src = smallestSrc(p.srcset);

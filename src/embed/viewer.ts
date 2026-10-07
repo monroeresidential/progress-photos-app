@@ -1,3 +1,4 @@
+import { photoAlt } from "../shared/alt";
 import { largestSrc, srcsetAttr } from "../shared/srcset";
 import type { FeedPhoto } from "../shared/types";
 
@@ -7,6 +8,7 @@ export interface ViewerSource {
   hasMore(): boolean;
   loadMore(): Promise<void>;
   opener(i: number): HTMLElement | undefined;
+  projectName(): string;
 }
 
 const SWIPE_PX = 50;
@@ -159,7 +161,7 @@ export class Viewer {
     img.removeAttribute("srcset");
     img.width = p.width;
     img.height = p.height;
-    img.alt = p.caption ?? "Construction progress photo";
+    img.alt = photoAlt(this.src.projectName(), p);
     img.sizes = "100vw";
     img.srcset = srcsetAttr(p.srcset);
     img.src = largestSrc(p.srcset);

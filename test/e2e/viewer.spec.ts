@@ -73,3 +73,7 @@ test("navigating during an in-flight save does not leak the edit into the next p
   expect(photos.some((p) => p.caption === "Edited in viewer")).toBe(true);
   expect(photos.some((p) => p.caption === "Second")).toBe(true);
 });
+
+test("the viewer image has project – area – caption alt text", async ({ page }) => {
+  await expect(viewer(page).locator(".viewer-stage img")).toHaveAttribute("alt", "E2E Manage – 4th floor – First");
+});
