@@ -1,4 +1,4 @@
-import type { AdminPhoto, ApiErrorBody, FeedPage, ProjectSummary } from "../shared/types";
+import type { AdminPhoto, ApiErrorBody, AreaCount, FeedPage, ProjectSummary } from "../shared/types";
 import type { Processed } from "./lib/process";
 
 export class ApiError extends Error {
@@ -48,12 +48,29 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 }
 
+const inFlight = new Map<string, Set<Promise<unknown>>>();
+
+function track<T>(id: string, p: Promise<T>): Promise<T> {
+  const set = inFlight.get(id) ?? new Set();
+  inFlight.set(id, set);
+  set.add(p);
+  const done = () => {
+    set.delete(p);
+    if (set.size === 0 && inFlight.get(id) === set) inFlight.delete(id);
+  };
+  p.then(done, done);
+  return p;
+}
+
 export const api = {
   projects: () => request<ProjectSummary[]>("/api/admin/projects"),
   photos: (project: string, cursor?: string) =>
     request<FeedPage<AdminPhoto>>(`/api/admin/photos?project=${encodeURIComponent(project)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`),
-  patch: (id: string, body: { caption?: string | null; hidden?: boolean }) =>
-    request<AdminPhoto>(`/api/admin/photos/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  areas: (slug: string) => request<AreaCount[]>(`/api/admin/projects/${encodeURIComponent(slug)}/areas`),
+  patch: (id: string, body: { caption?: string | null; hidden?: boolean; area?: string | null }) =>
+    track(id, request<AdminPhoto>(`/api/admin/photos/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })),
+  /** Resolves once every PATCH already sent for this photo has settled (and its callers have applied the result). */
+  settled: (id: string): Promise<void> => Promise.allSettled([...(inFlight.get(id) ?? [])]).then(() => {}),
   remove: (id: string) => request<{ purged?: boolean; objectsDeleted?: boolean } | undefined>(`/api/admin/photos/${id}`, { method: "DELETE" }),
 };
 
@@ -84,14 +101,15 @@ export function createStallTimer(
 export function uploadPhoto(
   project: string,
   p: Processed,
-  caption: string,
+  meta: { caption: string; area: string | null },
   onProgress: (fraction: number) => void,
 ): Promise<{ id: string; duplicate?: boolean }> {
   const form = new FormData();
   form.set("project", project);
   form.set("fingerprint", p.fingerprint);
   form.set("takenAt", p.takenAt);
-  if (caption) form.set("caption", caption);
+  if (meta.caption) form.set("caption", meta.caption);
+  if (meta.area) form.set("area", meta.area);
   form.set("width", String(p.width));
   form.set("height", String(p.height));
   for (const v of p.variants) form.set(`w${v.width}`, v.blob, `${v.width}.webp`);
@@ -150,4 +168,12 @@ export function uploadPhoto(
 export function errorMessage(err: unknown): string {
   if (err instanceof ApiError && err.code === "signin_required") return "Your sign-in expired. Close and reopen the app to sign in again.";
   return err instanceof Error ? err.message : String(err);
+}
+
+export function deleteNote(res: { purged?: boolean; objectsDeleted?: boolean } | undefined): string {
+  if (res?.objectsDeleted === false) {
+    return "Removed from the feed, but the image files couldn't be deleted and may still be reachable by direct link. Tell the site admin.";
+  }
+  if (res?.purged === false) return "Deleted. Cached copies may take a minute to disappear.";
+  return "";
 }

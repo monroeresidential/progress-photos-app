@@ -17,6 +17,7 @@ export interface PhotoRow {
   widths: string;
   fingerprint: string;
   hidden: number;
+  area: string | null;
 }
 
 export interface NewPhoto {
@@ -31,6 +32,7 @@ export interface NewPhoto {
   height: number;
   widths: number[];
   fingerprint: string;
+  area: string | null;
 }
 
 export async function listPhotos(
@@ -57,9 +59,9 @@ export async function listPhotos(
 export async function insertPhoto(db: D1Database, p: NewPhoto): Promise<void> {
   await db
     .prepare(
-      "INSERT INTO photos (id, project_slug, taken_at, taken_utc, uploaded_at, uploaded_by, caption, width, height, widths, fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO photos (id, project_slug, taken_at, taken_utc, uploaded_at, uploaded_by, caption, width, height, widths, fingerprint, area) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
-    .bind(p.id, p.projectSlug, p.takenAt, p.takenUtc, p.uploadedAt, p.uploadedBy, p.caption, p.width, p.height, JSON.stringify(p.widths), p.fingerprint)
+    .bind(p.id, p.projectSlug, p.takenAt, p.takenUtc, p.uploadedAt, p.uploadedBy, p.caption, p.width, p.height, JSON.stringify(p.widths), p.fingerprint, p.area)
     .run();
 }
 
@@ -73,7 +75,7 @@ export function getPhoto(db: D1Database, id: string) {
   return db.prepare("SELECT * FROM photos WHERE id = ?").bind(id).first<PhotoRow>();
 }
 
-export async function updatePhoto(db: D1Database, id: string, patch: { caption?: string | null; hidden?: boolean }): Promise<void> {
+export async function updatePhoto(db: D1Database, id: string, patch: { caption?: string | null; hidden?: boolean; area?: string | null }): Promise<void> {
   const sets: string[] = [];
   const params: unknown[] = [];
   if (patch.caption !== undefined) {
@@ -83,6 +85,10 @@ export async function updatePhoto(db: D1Database, id: string, patch: { caption?:
   if (patch.hidden !== undefined) {
     sets.push("hidden = ?");
     params.push(patch.hidden ? 1 : 0);
+  }
+  if (patch.area !== undefined) {
+    sets.push("area = ?");
+    params.push(patch.area);
   }
   if (sets.length === 0) return;
   await db.prepare(`UPDATE photos SET ${sets.join(", ")} WHERE id = ?`).bind(...params, id).run();
@@ -101,6 +107,7 @@ export function toFeedPhoto(row: PhotoRow, base: string): FeedPhoto {
     id: row.id,
     takenAt: row.taken_at,
     caption: row.caption,
+    area: row.area ?? null,
     width: row.width,
     height: row.height,
     srcset: Object.fromEntries(photoWidths(row).map((w) => [String(w), imageUrl(base, row.project_slug, row.id, w)])),

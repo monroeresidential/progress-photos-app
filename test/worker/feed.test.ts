@@ -28,6 +28,7 @@ describe("GET /api/feed/:project", () => {
       id: newer,
       takenAt: "2026-10-06T14:12:00-05:00",
       caption: "Fourth-floor slab pour",
+      area: null,
       width: 1920,
       height: 1440,
       srcset: {
@@ -88,5 +89,12 @@ describe("GET /api/feed/:project", () => {
     const other = await h.call(`/api/feed/${slug}`, { headers: { Origin: "https://evil.example" } });
     expect(other.status).toBe(200);
     expect(other.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
+
+  it("includes area in the public feed (used for alt text)", async () => {
+    const slug = await seedProject();
+    await seedPhoto(slug, { area: "Roof" });
+    const body = (await (await harness().call(`/api/feed/${slug}`)).json()) as { photos: Record<string, unknown>[] };
+    expect(body.photos[0]?.area).toBe("Roof");
   });
 });

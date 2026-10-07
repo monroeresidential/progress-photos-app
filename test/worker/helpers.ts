@@ -113,14 +113,14 @@ export async function seedProject(o: { origins?: string[]; name?: string } = {})
 
 export async function seedPhoto(
   slug: string,
-  o: { id?: string; takenAt?: string; hidden?: boolean; caption?: string | null; fingerprint?: string; widths?: number[] } = {},
+  o: { id?: string; takenAt?: string; hidden?: boolean; caption?: string | null; fingerprint?: string; widths?: number[]; area?: string | null } = {},
 ): Promise<string> {
   const id = o.id ?? ulid();
   const takenAt = o.takenAt ?? "2026-10-01T12:00:00-05:00";
   await env.DB.prepare(
-    "INSERT INTO photos (id, project_slug, taken_at, taken_utc, uploaded_at, uploaded_by, caption, width, height, widths, fingerprint, hidden) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO photos (id, project_slug, taken_at, taken_utc, uploaded_at, uploaded_by, caption, width, height, widths, fingerprint, hidden, area) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
   )
-    .bind(id, slug, takenAt, new Date(takenAt).toISOString(), new Date().toISOString(), "seed@example.com", o.caption ?? null, 1920, 1440, JSON.stringify(o.widths ?? [480, 960, 1920]), o.fingerprint ?? randomHex(), o.hidden ? 1 : 0)
+    .bind(id, slug, takenAt, new Date(takenAt).toISOString(), new Date().toISOString(), "seed@example.com", o.caption ?? null, 1920, 1440, JSON.stringify(o.widths ?? [480, 960, 1920]), o.fingerprint ?? randomHex(), o.hidden ? 1 : 0, o.area ?? null)
     .run();
   return id;
 }
@@ -160,6 +160,7 @@ export function uploadForm(o: {
   fingerprint?: string;
   takenAt?: string;
   caption?: string;
+  area?: string;
   width?: number;
   height?: number;
   files?: Record<string, Uint8Array>;
@@ -172,6 +173,7 @@ export function uploadForm(o: {
   f.set("fingerprint", o.fingerprint ?? randomHex());
   f.set("takenAt", o.takenAt ?? "2026-10-06T14:12:00-05:00");
   if (o.caption !== undefined) f.set("caption", o.caption);
+  if (o.area !== undefined) f.set("area", o.area);
   f.set("width", String(width));
   f.set("height", String(height));
   for (const [name, bytes] of Object.entries(files)) f.set(name, new File([bytes], `${name}.webp`, { type: "image/webp" }));

@@ -1,6 +1,6 @@
 // Fresh local D1 for Playwright: schema + fixed projects/photos. Run by `npm run e2e:server`.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { projectInsertSql, sqlString } from "./lib/project-args.ts";
 
 const PERSIST = ".wrangler/e2e";
@@ -13,6 +13,7 @@ const lines = [
   projectInsertSql({ slug: "e2e-feed", name: "E2E Feed", siteUrl: "http://host.test/progress/", origins: ORIGINS }, now),
   projectInsertSql({ slug: "e2e-empty", name: "E2E Empty", siteUrl: "http://host.test/progress/", origins: ORIGINS }, now),
   projectInsertSql({ slug: "e2e-upload", name: "E2E Upload", siteUrl: "http://host.test/progress/", origins: ORIGINS }, now),
+  projectInsertSql({ slug: "e2e-manage", name: "E2E Manage", siteUrl: "http://host.test/progress/", origins: ORIGINS }, now),
 ];
 
 // 60 photos: 12 per day on Sep 26–30, 2026, newest first gives pages of 24/24/12.
@@ -33,5 +34,7 @@ for (let n = 0; n < 60; n++) {
 
 writeFileSync(`${PERSIST}/seed.sql`, lines.join("\n"));
 const d1 = ["wrangler", "d1", "execute", "progress-photos", "--local", "--persist-to", PERSIST, "--file"];
-execFileSync("npx", [...d1, "migrations/0001_init.sql"], { stdio: "inherit" });
+for (const m of readdirSync("migrations").filter((f) => f.endsWith(".sql")).sort()) {
+  execFileSync("npx", [...d1, `migrations/${m}`], { stdio: "inherit" });
+}
 execFileSync("npx", [...d1, `${PERSIST}/seed.sql`], { stdio: "inherit" });

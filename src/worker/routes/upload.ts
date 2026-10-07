@@ -1,5 +1,6 @@
 import { parseTakenAt } from "../../shared/time";
 import { maxBytesFor, scaledHeight, selectWidths } from "../../shared/widths";
+import { normalizeArea } from "../areas";
 import { normalizeCaption } from "../captions";
 import type { App, Deps } from "../env";
 import { badRequest, HttpError } from "../http";
@@ -37,6 +38,7 @@ export function registerUpload(app: App, deps: Deps): void {
     if (taken.ms > now + DAY_MS) throw badRequest("takenAt is in the future");
 
     const caption = normalizeCaption(field("caption") ?? "");
+    const area = normalizeArea(field("area"));
 
     const width = Number(field("width"));
     const height = Number(field("height"));
@@ -99,6 +101,7 @@ export function registerUpload(app: App, deps: Deps): void {
         height,
         widths,
         fingerprint,
+        area,
       });
     } catch (err) {
       let dup: { id: string } | null;

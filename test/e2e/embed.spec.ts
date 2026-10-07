@@ -223,3 +223,12 @@ test("removing the element while the viewer is open restores page scrolling", as
   await page.evaluate(() => document.querySelector("progress-feed")!.remove());
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).not.toBe("hidden");
 });
+
+test("photos carry project + caption alt text, in the grid and the viewer", async ({ page }) => {
+  await openHost(page, { project: "e2e-feed" });
+  const first = feed(page).locator(".open img").first();
+  await expect(first).toHaveAttribute("alt", `E2E Feed – <img src=x onerror="window.__xss=1">`);
+  await expect(feed(page).locator(".open img").nth(2)).toHaveAttribute("alt", "E2E Feed construction progress, September 30, 2026");
+  await feed(page).locator(".open").first().click();
+  await expect(feed(page).locator(".viewer-img")).toHaveAttribute("alt", `E2E Feed – <img src=x onerror="window.__xss=1">`);
+});

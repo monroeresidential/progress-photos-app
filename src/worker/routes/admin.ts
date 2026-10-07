@@ -1,5 +1,6 @@
 import { decodeCursor } from "../../shared/cursor";
 import type { AdminPhoto, FeedPage, ProjectSummary } from "../../shared/types";
+import { listAreas, normalizeArea } from "../areas";
 import { normalizeCaption } from "../captions";
 import type { App, Deps } from "../env";
 import { badRequest, HttpError } from "../http";
@@ -10,10 +11,10 @@ import { feedUrl, imageKey, imageUrl } from "../urls";
 
 const photoNotFound = () => new HttpError(404, "not_found", "No such photo");
 
-function parsePatch(body: unknown): { caption?: string | null; hidden?: boolean } {
+function parsePatch(body: unknown): { caption?: string | null; hidden?: boolean; area?: string | null } {
   if (typeof body !== "object" || body === null || Array.isArray(body)) throw badRequest("Expected a JSON object");
   const b = body as Record<string, unknown>;
-  const patch: { caption?: string | null; hidden?: boolean } = {};
+  const patch: { caption?: string | null; hidden?: boolean; area?: string | null } = {};
   if ("caption" in b) {
     if (b.caption === null) patch.caption = null;
     else if (typeof b.caption === "string") patch.caption = normalizeCaption(b.caption);
@@ -23,7 +24,12 @@ function parsePatch(body: unknown): { caption?: string | null; hidden?: boolean 
     if (typeof b.hidden !== "boolean") throw badRequest("hidden must be true or false");
     patch.hidden = b.hidden;
   }
-  if (patch.caption === undefined && patch.hidden === undefined) throw badRequest("Nothing to update");
+  if ("area" in b) {
+    if (b.area === null) patch.area = null;
+    else if (typeof b.area === "string") patch.area = normalizeArea(b.area);
+    else throw badRequest("area must be a string or null");
+  }
+  if (patch.caption === undefined && patch.hidden === undefined && patch.area === undefined) throw badRequest("Nothing to update");
   return patch;
 }
 
@@ -31,6 +37,12 @@ export function registerAdmin(app: App, deps: Deps): void {
   app.get("/api/admin/projects", async (c) => {
     const rows = await listProjects(c.env.DB);
     return c.json(rows.map((p): ProjectSummary => ({ slug: p.slug, name: p.name, siteUrl: p.site_url })));
+  });
+
+  app.get("/api/admin/projects/:slug/areas", async (c) => {
+    const project = await getProject(c.env.DB, c.req.param("slug"));
+    if (!project) throw new HttpError(404, "unknown_project", "No such project");
+    return c.json(await listAreas(c.env.DB, project.slug));
   });
 
   app.get("/api/admin/photos", async (c) => {

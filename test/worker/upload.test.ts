@@ -178,4 +178,41 @@ describe("POST /api/admin/photos", () => {
     expect(await env.DB.prepare("SELECT id FROM photos WHERE id = ?").bind(id).first()).toEqual({ id });
     expect(await listKeys(`${slug}/`)).toHaveLength(3);
   });
+
+  it("stores the area, trimmed, with each photo", async () => {
+    const slug = await seedProject();
+    const res = await harness().admin("/api/admin/photos", { method: "POST", body: uploadForm({ project: slug, area: "  4th floor  " }) });
+    expect(res.status).toBe(201);
+    const { id } = (await res.json()) as { id: string };
+    const row = await env.DB.prepare("SELECT area FROM photos WHERE id = ?").bind(id).first<{ area: string | null }>();
+    expect(row?.area).toBe("4th floor");
+  });
+
+  it("stores no area when the field is empty or missing", async () => {
+    const slug = await seedProject();
+    for (const area of ["", "   ", undefined]) {
+      const res = await harness().admin("/api/admin/photos", { method: "POST", body: uploadForm({ project: slug, area }) });
+      const { id } = (await res.json()) as { id: string };
+      const row = await env.DB.prepare("SELECT area FROM photos WHERE id = ?").bind(id).first<{ area: string | null }>();
+      expect(row?.area).toBeNull();
+    }
+  });
+
+  it("rejects an area over 40 characters", async () => {
+    const slug = await seedProject();
+    const res = await harness().admin("/api/admin/photos", { method: "POST", body: uploadForm({ project: slug, area: "x".repeat(41) }) });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "bad_request", message: "Area must be 40 characters or fewer" });
+  });
+
+  it("keeps the original area on a duplicate upload", async () => {
+    const slug = await seedProject();
+    const fingerprint = randomHex();
+    const first = await harness().admin("/api/admin/photos", { method: "POST", body: uploadForm({ project: slug, fingerprint, area: "Lobby" }) });
+    const { id } = (await first.json()) as { id: string };
+    const again = await harness().admin("/api/admin/photos", { method: "POST", body: uploadForm({ project: slug, fingerprint, area: "Roof" }) });
+    expect(await again.json()).toEqual({ id, duplicate: true });
+    const row = await env.DB.prepare("SELECT area FROM photos WHERE id = ?").bind(id).first<{ area: string }>();
+    expect(row?.area).toBe("Lobby");
+  });
 });

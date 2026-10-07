@@ -66,6 +66,9 @@ Playwright against `wrangler dev`, ULIDs for photo ids.
 - **`compatibility_date` stays at `2026-08-22`**, the max the test pool's workerd supports; `wrangler dev` scripts need `--local-upstream localhost:8787` for the `DEV_AUTH_EMAIL` bypass.
 - **CORS** on the feed echoes `Origin` only if it is in that project's
   `allowed_origins` JSON array.
+- **`area` is stored per photo** (`migrations/0002_area.sql`) and returned in `AdminPhoto`, `FeedPhoto` and `/api/admin/projects/:slug/areas`. Feed changes must stay additive — pinned embeds read that shape.
+- **Alt text comes from one place:** `src/shared/alt.ts#photoAlt`, used by the embed and the uploader app.
+- **The upload app is vanilla TS modules on `h()`** (`src/app/`: header, upload, manage, viewer, select, sheet, icons). Pure helpers (`days.ts`, `bulk.ts`, `lib/jpeg-meta.ts#readCaptureTime`) are unit-tested; the UI is covered by Playwright specs that seed data through `test/e2e/admin-api.ts`.
 - Errors are always `{ "error": "<code>", "message": "<text>" }`.
 - `<progress-feed>` uses Shadow DOM, has no dependencies (target < 15 KB
   gzipped), and is themed only via the `--pf-*` CSS custom properties listed

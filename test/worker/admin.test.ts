@@ -139,4 +139,23 @@ describe("admin routes", () => {
       vi.restoreAllMocks();
     }
   });
+
+  it("includes area in the admin list", async () => {
+    const slug = await seedProject();
+    await seedPhoto(slug, { area: "Roof" });
+    const page = (await (await harness().admin(`/api/admin/photos?project=${slug}`)).json()) as FeedPage<AdminPhoto>;
+    expect(page.photos[0]?.area).toBe("Roof");
+  });
+
+  it("PATCH sets, clears and validates area", async () => {
+    const slug = await seedProject();
+    const id = await seedPhoto(slug);
+    const h = harness();
+    const set = (await (await h.admin(`/api/admin/photos/${id}`, json({ area: " Lobby " }))).json()) as AdminPhoto;
+    expect(set.area).toBe("Lobby");
+    const cleared = (await (await h.admin(`/api/admin/photos/${id}`, json({ area: null }))).json()) as AdminPhoto;
+    expect(cleared.area).toBeNull();
+    expect((await h.admin(`/api/admin/photos/${id}`, json({ area: "x".repeat(41) }))).status).toBe(400);
+    expect((await h.admin(`/api/admin/photos/${id}`, json({ area: 5 }))).status).toBe(400);
+  });
 });

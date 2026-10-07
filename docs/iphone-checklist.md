@@ -16,3 +16,18 @@ Run on a real iPhone in Safari against https://progress-staging.monroeresidentia
 - [ ] Download a 1920w file from the feed and check it has no GPS/EXIF (e.g. `exiftool`).
 - [ ] The photo's date heading matches the day it was taken on site.
 - [ ] Manage tab: edit caption, hide (gone from the feed within ~60 s), unhide, delete (images 404 within seconds).
+
+## Journal reskin
+
+- [ ] Light and dark mode follow the phone's setting; the status bar color matches.
+- [ ] **Take photo** opens the camera; **Library** opens the photo library.
+- [ ] Area: "+ Add" a new area, upload — the pill appears next time; tapping the selected pill clears it.
+- [ ] Queue shows the capture-time range; rows fade out on Done; the batch caption clears and the area stays.
+- [ ] Manage: day headers with "N photos · M live"; hidden photos dimmed with "Hidden from site".
+- [ ] Viewer: swipe between photos; Save caption; Hide/Unhide; Delete asks first and moves on.
+- [ ] Select: tick several, bulk Hide, bulk Caption, bulk Delete (one confirmation).
+- [ ] Tapping into "+ Add", a photo caption or the viewer caption doesn't zoom the page.
+- [ ] Pinch-zoom works on any screen; in the viewer, pinch into a photo and drag — it pans without switching photos; at normal zoom, a swipe still switches.
+- [ ] In Select mode, the Hide / Caption / Delete bar stays at the bottom while scrolling.
+- [ ] Type a new area with "+ Add" and tap Upload straight away — the photos get that area.
+- [ ] Project title picker opens the native picker; it's locked while uploading.
