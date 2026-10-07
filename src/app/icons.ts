@@ -26,6 +26,29 @@ const ICONS = {
 
 export type IconName = keyof typeof ICONS;
 
+/** The PP monogram (one "P" path, mirrored), 200×200, filled with currentColor. */
+const MARK_P = "M36.70 154L20.50 154L20.50 49L62.20 49Q71.80 49 79.38 52.83Q86.95 56.65 91.22 63.63Q95.50 70.60 95.50 80.35L95.50 80.35L95.50 82.30Q95.50 92.05 91.07 99.10Q86.65 106.15 79.15 109.90Q71.65 113.65 62.20 113.65L62.20 113.65L36.70 113.65L36.70 154ZM36.70 63.70L36.70 98.95L60.55 98.95Q69.10 98.95 74.20 94.45Q79.30 89.95 79.30 82.15L79.30 82.15L79.30 80.65Q79.30 72.70 74.20 68.20Q69.10 63.70 60.55 63.70L60.55 63.70L36.70 63.70Z";
+
+export function mark(size = 26): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 200 200");
+  svg.setAttribute("width", String(size));
+  svg.setAttribute("height", String(size));
+  svg.setAttribute("fill", "currentColor");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "mark");
+  const g = document.createElementNS(SVG_NS, "g");
+  g.setAttribute("transform", "translate(0 -1.5)");
+  for (const mirror of [false, true]) {
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("d", MARK_P);
+    if (mirror) path.setAttribute("transform", "translate(200 0) scale(-1 1)");
+    g.append(path);
+  }
+  svg.append(g);
+  return svg;
+}
+
 export function icon(name: IconName, size = 20): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, "svg");
   const attrs: Record<string, string> = {

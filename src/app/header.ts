@@ -1,6 +1,6 @@
 import type { ProjectSummary } from "../shared/types";
 import { h } from "./dom";
-import { icon } from "./icons";
+import { icon, mark } from "./icons";
 
 export type Tab = "upload" | "manage";
 
@@ -61,7 +61,7 @@ export function mountHeader(o: HeaderOptions): Header {
   const element = h(
     "header",
     { class: "app-header" },
-    h("h1", { class: "app-title" }, "MRP Progress Photos"),
+    h("h1", { class: "app-title" }, mark(26), h("span", { class: "app-title-text" }, "MRP Progress Photos")),
     projectRow,
     selectRow,
     h("div", { class: "seg", role: "tablist" }, uploadTab, manageTab),
