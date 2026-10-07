@@ -1,98 +1,221 @@
-import { smallestSrc } from "../shared/srcset";
+import { smallestSrc, srcsetAttr } from "../shared/srcset";
 import type { AdminPhoto, ProjectSummary } from "../shared/types";
-import { api, errorMessage } from "./api";
+import { api, deleteNote, errorMessage } from "./api";
+import { dayCounts, dayLabel, groupByDay, timeLabel } from "./days";
 import { h } from "./dom";
+import type { SelectState } from "./header";
+import { icon } from "./icons";
+import { openSheet } from "./sheet";
+import { openViewer } from "./viewer";
 
-export function mountManage(
-  container: HTMLElement,
-  o: { getProject: () => ProjectSummary; onSelectChange: (s: unknown) => void },
-): { reload(): void; startSelect(): void; cancelSelect(): void; toggleAll(): void } {
-  const list = h("ul");
-  const status = h("p", { class: "muted", role: "status" });
-  const more = h("button", { hidden: true, onclick: () => void load(false) }, "Load more");
-  container.replaceChildren(list, status, more);
+export interface ManageOptions {
+  getProject(): ProjectSummary;
+  onSelectChange(state: SelectState | null): void;
+}
+
+export interface ManageTab {
+  reload(): void;
+  startSelect(): void;
+  cancelSelect(): void;
+  toggleAll(): void;
+}
+
+export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab {
+  let photos: AdminPhoto[] = [];
+  /** Photos in display order (by day group), which is also the viewer's order. */
+  let ordered: AdminPhoto[] = [];
   let cursor: string | null = null;
   let generation = 0;
+  let loading = false;
+  let selecting = false;
+  const selection = new Set<string>();
+
+  const body = h("div", { class: "manage-body" });
+  const status = h("p", { class: "manage-status", role: "status" });
+  const retry = h("button", { type: "button", class: "btn btn-secondary manage-more", hidden: true, onclick: () => void load(photos.length === 0) }, "Retry");
+  const more = h("button", { type: "button", class: "btn btn-secondary manage-more", hidden: true, onclick: () => void load(false) }, "Load more");
+  const footerSlot = h("div");
+  container.replaceChildren(body, status, retry, more, footerSlot);
+
+  function emitSelect(): void {
+    o.onSelectChange(selecting ? { count: selection.size, allSelected: photos.length > 0 && selection.size === photos.length } : null);
+  }
+
+  function card(p: AdminPhoto, index: number): HTMLLIElement {
+    const selected = selection.has(p.id);
+    const img = h("img", { alt: p.caption ?? "Progress photo", loading: "lazy", decoding: "async" });
+    img.sizes = "(min-width: 600px) 560px, 100vw";
+    img.srcset = srcsetAttr(p.srcset);
+    img.src = smallestSrc(p.srcset);
+    const photoBtn = h(
+      "button",
+      {
+        type: "button",
+        class: "card-photo",
+        "aria-label": selecting ? `${selected ? "Deselect" : "Select"} photo taken ${timeLabel(p.takenAt)}` : `Open photo taken ${timeLabel(p.takenAt)}`,
+        onclick: () => (selecting ? toggle(p.id) : view(index)),
+      },
+      img,
+      p.hidden ? h("span", { class: "hidden-tag" }, icon("eye-off", 14), "Hidden from site") : null,
+      selecting ? h("span", { class: "check", "aria-hidden": "true" }, selected ? icon("check", 14) : null) : null,
+    );
+    if (selecting) photoBtn.setAttribute("aria-pressed", String(selected));
+    const meta = [timeLabel(p.takenAt), p.area].filter(Boolean).join(" · ");
+    return h(
+      "li",
+      { class: `card${p.hidden ? " is-hidden" : ""}${selected ? " is-selected" : ""}`, "data-id": p.id },
+      photoBtn,
+      h(
+        "div",
+        { class: "card-info" },
+        h("div", {}, h("div", { class: "card-caption" }, p.caption ?? ""), h("div", { class: "card-meta tabular" }, meta)),
+        selecting ? h("span") : h("button", { type: "button", class: "icon-btn", "aria-label": "More actions", onclick: () => actions(p, index) }, icon("more-horizontal", 20)),
+      ),
+    );
+  }
+
+  function render(): void {
+    const groups = groupByDay(photos);
+    ordered = groups.flatMap((g) => g.photos);
+    let i = 0;
+    body.replaceChildren(
+      ...groups.map((g) =>
+        h(
+          "section",
+          { class: "day" },
+          h("div", { class: "day-head" }, h("h2", { class: "day-title" }, dayLabel(g.key)), h("span", { class: "day-counts tabular" }, dayCounts(g.photos))),
+          h("ul", { class: "cards" }, ...g.photos.map((p) => card(p, i++))),
+        ),
+      ),
+    );
+    if (!loading && photos.length === 0 && !status.textContent) status.textContent = "No photos yet.";
+    if (photos.length > 0 && status.textContent === "No photos yet.") status.textContent = "";
+  }
 
   async function load(reset: boolean): Promise<void> {
     const mine = reset ? ++generation : generation;
     if (reset) {
-      list.replaceChildren();
+      photos = [];
       cursor = null;
+      selection.clear();
     }
+    loading = true;
     more.hidden = true;
+    retry.hidden = true;
     status.textContent = "Loading…";
+    render();
     try {
       const page = await api.photos(o.getProject().slug, cursor ?? undefined);
       if (mine !== generation) return;
-      for (const p of page.photos) list.append(card(p));
+      photos = [...photos, ...page.photos];
       cursor = page.nextCursor;
-      more.hidden = cursor === null;
-      status.textContent = list.childElementCount === 0 ? "No photos yet." : "";
+      status.textContent = "";
     } catch (err) {
-      if (mine === generation) status.textContent = errorMessage(err);
-    }
-  }
-
-  function card(initial: AdminPhoto): HTMLLIElement {
-    let photo = initial;
-    const caption = h("input", { type: "text", value: photo.caption ?? "", maxLength: 280, "aria-label": "Caption" });
-    const note = h("span", { class: "muted" });
-    const li = h("li", { class: photo.hidden ? "card hidden-photo" : "card" });
-    const hide = h("button", {}, photo.hidden ? "Unhide" : "Hide");
-
-    const buttons: HTMLButtonElement[] = [];
-    async function act(fn: () => Promise<void>): Promise<void> {
-      note.textContent = "";
-      for (const b of buttons) b.disabled = true;
-      try {
-        await fn();
-      } catch (err) {
-        note.textContent = errorMessage(err);
-      } finally {
-        for (const b of buttons) b.disabled = false;
+      if (mine !== generation) return;
+      status.textContent = errorMessage(err);
+      retry.hidden = false;
+    } finally {
+      if (mine === generation) {
+        loading = false;
+        more.hidden = cursor === null;
+        render();
+        emitSelect();
       }
     }
-
-    const save = h("button", {
-      onclick: () =>
-        act(async () => {
-          photo = await api.patch(photo.id, { caption: caption.value.trim() || null });
-          caption.value = photo.caption ?? "";
-          note.textContent = "Saved";
-        }),
-    }, "Save");
-    hide.addEventListener("click", () =>
-      act(async () => {
-        photo = await api.patch(photo.id, { hidden: !photo.hidden });
-        li.className = photo.hidden ? "card hidden-photo" : "card";
-        hide.textContent = photo.hidden ? "Unhide" : "Hide";
-      }),
-    );
-    const del = h("button", {
-      onclick: () =>
-        act(async () => {
-          if (!confirm("Delete this photo? This can't be undone.")) return;
-          const res = await api.remove(photo.id);
-          li.remove();
-          let note = "";
-          if (res?.objectsDeleted === false) {
-            note = "Removed from the feed, but the image files couldn't be deleted and may still be reachable by direct link. Tell the site admin.";
-          } else if (res?.purged === false) {
-            note = "Deleted. Cached copies may take a minute to disappear.";
-          }
-          const empty = list.childElementCount === 0 && cursor === null;
-          status.textContent = [note, empty ? "No photos yet." : ""].filter(Boolean).join(" ");
-        }),
-    }, "Delete");
-
-    buttons.push(save, hide, del);
-    li.append(
-      h("img", { src: smallestSrc(photo.srcset), alt: "", loading: "lazy" }),
-      h("div", { class: "meta" }, h("span", { class: "muted" }, new Date(photo.takenAt).toLocaleString()), caption, h("div", { class: "row" }, save, hide, del), note),
-    );
-    return li;
   }
 
-  return { reload: () => void load(true), startSelect() {}, cancelSelect() {}, toggleAll() {} };
+  function replace(p: AdminPhoto): void {
+    photos = photos.map((x) => (x.id === p.id ? p : x));
+    render();
+  }
+
+  function removePhoto(id: string): void {
+    photos = photos.filter((x) => x.id !== id);
+    selection.delete(id);
+    render();
+    emitSelect();
+  }
+
+  /** Shows a message without hiding the empty-list state. */
+  function showNote(note: string): void {
+    const empty = photos.length === 0 && cursor === null ? "No photos yet." : "";
+    status.textContent = [note, empty].filter(Boolean).join(" ");
+  }
+
+  async function run(fn: () => Promise<void>): Promise<void> {
+    status.textContent = "";
+    try {
+      await fn();
+    } catch (err) {
+      status.textContent = errorMessage(err);
+    }
+  }
+
+  function view(index: number): void {
+    openViewer({
+      photos: () => ordered,
+      index,
+      hasMore: () => cursor !== null,
+      loadMore: () => load(false),
+      onUpdate: replace,
+      onDelete: (id: string, note: string) => {
+        removePhoto(id);
+        showNote(note);
+      },
+      returnFocus: (id: string) => body.querySelector<HTMLElement>(`[data-id="${id}"] .card-photo`),
+    });
+  }
+
+  function actions(p: AdminPhoto, index: number): void {
+    openSheet([
+      { label: "Edit caption", icon: "pencil", onSelect: () => view(index) },
+      {
+        label: p.hidden ? "Unhide" : "Hide",
+        icon: p.hidden ? "eye" : "eye-off",
+        onSelect: () => void run(async () => replace(await api.patch(p.id, { hidden: !p.hidden }))),
+      },
+      {
+        label: "Delete",
+        icon: "trash-2",
+        danger: true,
+        onSelect: () =>
+          void run(async () => {
+            if (!confirm("Delete this photo? This can't be undone.")) return;
+            const res = await api.remove(p.id);
+            removePhoto(p.id);
+            showNote(deleteNote(res));
+          }),
+      },
+    ]);
+  }
+
+  function toggle(id: string): void {
+    if (selection.has(id)) selection.delete(id);
+    else selection.add(id);
+    render();
+    emitSelect();
+  }
+
+  return {
+    reload: () => void load(true),
+    startSelect() {
+      selecting = true;
+      selection.clear();
+      render();
+      emitSelect();
+    },
+    cancelSelect() {
+      if (!selecting) return;
+      selecting = false;
+      selection.clear();
+      render();
+      emitSelect();
+    },
+    toggleAll() {
+      if (selection.size === photos.length) selection.clear();
+      else for (const p of photos) selection.add(p.id);
+      render();
+      emitSelect();
+    },
+  };
 }

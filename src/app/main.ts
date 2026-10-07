@@ -58,14 +58,15 @@ async function start(): Promise<void> {
     onSelectAll: () => manage.toggleAll(),
   });
   const upload = mountUpload(uploadPane, () => current, (running) => header.setLocked(running));
-  const manage = mountManage(managePane, { getProject: () => current, onSelectChange: (s) => header.setSelect(s as Parameters<typeof header.setSelect>[0]) });
+  const manage = mountManage(managePane, { getProject: () => current, onSelectChange: header.setSelect });
 
   function show(t: Tab): void {
     if (t === "upload") manage.cancelSelect();
+    const enteringManage = t === "manage" && managePane.hidden;
     uploadPane.hidden = t !== "upload";
     managePane.hidden = t !== "manage";
     header.setTab(t);
-    if (t === "manage") manage.reload();
+    if (enteringManage) manage.reload();
   }
 
   root.replaceChildren(header.element, uploadPane, managePane);
