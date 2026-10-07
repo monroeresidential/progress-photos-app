@@ -17,7 +17,7 @@ export interface SelectFooterOptions {
 
 const plural = (n: number) => `${n} ${n === 1 ? "photo" : "photos"}`;
 
-export function mountSelectFooter(o: SelectFooterOptions): { element: HTMLElement; refresh(): void } {
+export function mountSelectFooter(o: SelectFooterOptions): { element: HTMLElement; refresh(): void; busy(): boolean } {
   let busy = false;
   const progress = h("p", { class: "select-progress tabular", role: "status" });
   const hideBtn = h("button", { type: "button", class: "btn btn-secondary" });
@@ -36,42 +36,49 @@ export function mountSelectFooter(o: SelectFooterOptions): { element: HTMLElemen
     for (const b of [hideBtn, captionBtn, deleteBtn]) b.disabled = busy || o.selected().length === 0;
   }
 
-  async function bulk<T>(verb: string, fn: (id: string) => Promise<T>, apply: (id: string, value: T) => void): Promise<void> {
-    const ids = o.selected();
-    if (ids.length === 0) return;
+  /** Runs fn over a snapshot of ids; returns the failure message ("" when all succeeded). */
+  async function bulk<T>(ids: string[], verb: string, fn: (id: string) => Promise<T>, apply: (id: string, value: T) => void): Promise<string> {
+    if (ids.length === 0) return "";
     busy = true;
+    o.onMessage("");
     refresh();
     progress.textContent = `${verb} 0 of ${ids.length}…`;
     const res = await runBulk(ids, BULK_CONCURRENCY, fn, (done, total) => (progress.textContent = `${verb} ${done} of ${total}…`));
     busy = false;
     progress.textContent = "";
     for (const { id, value } of res.ok) apply(id, value);
-    if (res.failed.length > 0) {
-      const signin = res.failed.some((f) => f.error instanceof ApiError && f.error.code === "signin_required");
-      o.onMessage(
-        signin
-          ? errorMessage(new ApiError(401, "signin_required", "Sign-in expired"))
-          : `${res.failed.length} couldn't be updated. They're still selected — tap the action again to retry.`,
-      );
-    }
     refresh();
+    if (res.failed.length === 0) return "";
+    const signin = res.failed.some((f) => f.error instanceof ApiError && f.error.code === "signin_required");
+    return signin
+      ? errorMessage(new ApiError(401, "signin_required", "Sign-in expired"))
+      : `${res.failed.length} couldn't be updated. They're still selected — tap the action again to retry.`;
   }
 
-  hideBtn.addEventListener("click", () => {
+  const say = (...parts: string[]) => {
+    const msg = parts.filter(Boolean).join(" ");
+    if (msg) o.onMessage(msg);
+  };
+
+  hideBtn.addEventListener("click", async () => {
+    const ids = o.selected();
     const target = !allHidden();
-    void bulk(target ? "Hiding" : "Unhiding", (id) => api.patch(id, { hidden: target }), (_, p) => o.onUpdate(p));
+    say(await bulk(ids, target ? "Hiding" : "Unhiding", (id) => api.patch(id, { hidden: target }), (_, p) => o.onUpdate(p)));
   });
   captionBtn.addEventListener("click", async () => {
-    const n = o.selected().length;
-    const text = await promptSheet({ title: `Caption for ${plural(n)}`, confirm: `Apply to ${plural(n)}` });
+    const ids = o.selected();
+    if (ids.length === 0) return;
+    const text = await promptSheet({ title: `Caption for ${plural(ids.length)}`, confirm: `Apply to ${plural(ids.length)}` });
     if (text === null) return;
-    void bulk("Updating", (id) => api.patch(id, { caption: text.trim() || null }), (_, p) => o.onUpdate(p));
+    say(await bulk(ids, "Updating", (id) => api.patch(id, { caption: text.trim() || null }), (_, p) => o.onUpdate(p)));
   });
-  deleteBtn.addEventListener("click", () => {
-    const n = o.selected().length;
-    if (!confirm(`Delete ${plural(n)}? This can't be undone.`)) return;
+  deleteBtn.addEventListener("click", async () => {
+    const ids = o.selected();
+    if (ids.length === 0) return;
+    if (!confirm(`Delete ${plural(ids.length)}? This can't be undone.`)) return;
     const notes = new Set<string>();
-    void bulk(
+    const failure = await bulk(
+      ids,
       "Deleting",
       (id) => api.remove(id),
       (id, res) => {
@@ -79,11 +86,10 @@ export function mountSelectFooter(o: SelectFooterOptions): { element: HTMLElemen
         const note = deleteNote(res);
         if (note) notes.add(note);
       },
-    ).then(() => {
-      if (notes.size > 0) o.onMessage([...notes].join(" "));
-    });
+    );
+    say(failure, ...notes);
   });
 
   refresh();
-  return { element, refresh };
+  return { element, refresh, busy: () => busy };
 }

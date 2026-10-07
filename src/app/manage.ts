@@ -242,6 +242,7 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
   }
 
   function toggle(id: string): void {
+    if (footer.busy()) return;
     if (selection.has(id)) selection.delete(id);
     else selection.add(id);
     render();
@@ -257,13 +258,14 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
       emitSelect();
     },
     cancelSelect() {
-      if (!selecting) return;
+      if (!selecting || footer.busy()) return;
       selecting = false;
       selection.clear();
       render();
       emitSelect();
     },
     toggleAll() {
+      if (footer.busy()) return;
       if (selection.size === photos.length) selection.clear();
       else for (const p of photos) selection.add(p.id);
       render();

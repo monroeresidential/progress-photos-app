@@ -59,3 +59,27 @@ test("All / None and bulk delete with one confirmation", async ({ page, request 
   expect(prompts).toEqual(["Delete 3 photos? This can't be undone."]);
   expect(await adminPhotos(request, "e2e-manage")).toHaveLength(0);
 });
+
+test("a failed photo stays selected with a retry message; retrying succeeds and clears it", async ({ page, request }) => {
+  const stored = await adminPhotos(request, "e2e-manage");
+  const failId = stored[0].id;
+  await page.route("**/api/admin/photos/*", (route) => {
+    if (route.request().method() === "PATCH" && route.request().url().endsWith(`/${failId}`)) {
+      return route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "boom" }) });
+    }
+    return route.continue();
+  });
+  await page.locator(".card-photo").nth(0).click();
+  await page.locator(".card-photo").nth(1).click();
+  await page.getByRole("button", { name: "Hide" }).click();
+
+  await expect(selectedCount(page)).toHaveText("1 selected");
+  await expect(page.locator(".card.is-selected")).toHaveCount(1);
+  await expect(page.locator(".card.is-selected")).toHaveAttribute("data-id", failId);
+  await expect(page.locator(".manage-status")).toContainText("couldn't be updated");
+
+  await page.unroute("**/api/admin/photos/*");
+  await page.getByRole("button", { name: "Hide" }).click();
+  await expect(selectedCount(page)).toHaveText("0 selected");
+  await expect(page.locator(".manage-status")).not.toContainText("couldn't be updated");
+});
