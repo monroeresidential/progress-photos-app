@@ -185,6 +185,7 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
   function replace(p: AdminPhoto): void {
     photos = photos.map((x) => (x.id === p.id ? p : x));
     render();
+    footer.refresh(); // a Hide/Unhide elsewhere can flip the footer's label
     viewerSync?.();
   }
 

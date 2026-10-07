@@ -172,3 +172,35 @@ test("a bulk Hide waits for a pending single Unhide instead of trusting the stal
   expect(stored.find((p) => p.caption === "One")?.hidden).toBe(true);
   expect(stored.find((p) => p.caption === "Two")?.hidden).toBe(true);
 });
+
+test("the Hide/Unhide label follows a single Hide that lands after selecting, and a click does what it says", async ({ page, request }) => {
+  await page.getByRole("button", { name: "Cancel" }).click();
+  const more = (n: number) => page.locator(".card").nth(n).getByRole("button", { name: "More actions" });
+  await more(1).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Hide" }).click(); // B hidden
+  await expect(page.locator(".card").nth(1)).toHaveClass(/is-hidden/);
+
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  await page.route("**/api/admin/photos/*", async (route) => {
+    if (route.request().method() === "PATCH") await gate;
+    await route.continue();
+  });
+  await more(0).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Hide" }).click(); // A's Hide pending
+
+  await page.getByRole("button", { name: "Select" }).click();
+  await page.locator(".card-photo").nth(0).click();
+  await page.locator(".card-photo").nth(1).click();
+  const footer = page.locator(".select-footer");
+  await expect(footer.getByRole("button", { name: "Hide" })).toBeVisible();
+  release();
+  await expect(page.locator(".card").first()).toHaveClass(/is-hidden/);
+  await expect(footer.getByRole("button", { name: "Unhide" })).toBeVisible(); // both hidden now
+
+  await footer.getByRole("button", { name: "Unhide" }).click();
+  await expect(selectedCount(page)).toHaveText("0 selected");
+  const stored = await adminPhotos(request, "e2e-manage");
+  expect(stored.find((p) => p.caption === "One")?.hidden).toBe(false);
+  expect(stored.find((p) => p.caption === "Two")?.hidden).toBe(false);
+});

@@ -22,6 +22,8 @@ export function mountSelectFooter(o: SelectFooterOptions): { element: HTMLElemen
   /** The direction (true = Hide) of the last Hide/Unhide run while failures remain selected, so a retry goes the same way. */
   let pending: boolean | null = null;
   let pendingKey: string | null = null;
+  /** What the Hide/Unhide button currently says (true = Hide); a click does exactly that. */
+  let shownTarget = true;
   const progress = h("p", { class: "select-progress tabular", role: "status" });
   const hideBtn = h("button", { type: "button", class: "btn btn-secondary" });
   const captionBtn = h("button", { type: "button", class: "btn btn-secondary" }, icon("pencil", 18), "Caption");
@@ -36,7 +38,8 @@ export function mountSelectFooter(o: SelectFooterOptions): { element: HTMLElemen
   function refresh(): void {
     // The selection changed by the user (not by our own run): the remembered direction no longer applies.
     if (pending !== null && pendingKey !== null && pendingKey !== o.selected().join(",")) pending = pendingKey = null;
-    const unhide = !(pending ?? !allHidden());
+    shownTarget = pending ?? !allHidden();
+    const unhide = !shownTarget;
     hideBtn.replaceChildren(icon(unhide ? "eye" : "eye-off", 18), unhide ? "Unhide" : "Hide");
     for (const b of [hideBtn, captionBtn, deleteBtn]) b.disabled = busy || o.selected().length === 0;
   }
@@ -67,7 +70,7 @@ export function mountSelectFooter(o: SelectFooterOptions): { element: HTMLElemen
 
   hideBtn.addEventListener("click", async () => {
     const ids = o.selected();
-    const target = pending ?? !allHidden();
+    const target = shownTarget;
     pending = target;
     pendingKey = null; // our own updates below mustn't read as a user change
     const failure = await bulk(
