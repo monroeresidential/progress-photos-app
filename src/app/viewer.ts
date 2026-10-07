@@ -222,6 +222,7 @@ export function openViewer(o: ViewerOptions): { sync(): void } {
     if (indexOf() + delta >= o.photos().length) {
       if (!o.hasMore()) return;
       stepping = true;
+      caption.readOnly = true; // render() replaces the caption when the page lands; nothing typed meanwhile may be lost
       try {
         await o.loadMore();
       } catch (err) {
@@ -229,6 +230,7 @@ export function openViewer(o: ViewerOptions): { sync(): void } {
         return;
       } finally {
         stepping = false;
+        caption.readOnly = false;
       }
       if (!el.isConnected) return;
     }

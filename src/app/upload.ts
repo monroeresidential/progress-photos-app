@@ -59,6 +59,7 @@ async function captureTime(file: File): Promise<string> {
 export function mountUpload(container: HTMLElement, getProject: () => ProjectSummary, onRunningChange?: (running: boolean) => void): UploadTab {
   const items: Item[] = [];
   let running = false;
+  let attempted = false; // an upload ran since the caption was last cleared
   let area: string | null = null;
   let areas: string[] = [];
   let finished = { done: 0, duplicate: 0 };
@@ -176,13 +177,21 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     renderPills();
   }
 
+  const isSettled = (i: Item) => i.status === "done" || i.status === "duplicate" || i.status === "unreadable";
+
   function batchFinished(): boolean {
-    return items.length > 0 && items.every((i) => i.status === "done" || i.status === "duplicate" || i.status === "unreadable");
+    return items.length > 0 && items.every(isSettled);
   }
 
-  /** When every remaining row is settled, the batch is over: its caption doesn't carry to the next one (the area does). */
+  /**
+   * When every remaining row of an attempted batch is settled (or removed), the batch is over:
+   * its caption doesn't carry to the next one (the area does).
+   */
   function finishBatchIfDone(): void {
-    if (!running && batchFinished()) batchCaption.value = "";
+    if (!running && attempted && items.every(isSettled)) {
+      batchCaption.value = "";
+      attempted = false;
+    }
     refresh();
   }
 
@@ -308,6 +317,7 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
   async function runQueue(): Promise<void> {
     if (running) return;
     running = true;
+    attempted = true;
     notice.hidden = true;
     onRunningChange?.(true);
     refresh();

@@ -181,3 +181,54 @@ test("a failed next-page load shows its error in the viewer", async ({ page, req
   await expect(viewer(page).locator(".viewer-note")).toHaveText(/page boom|500/);
   await expect(viewer(page).locator(".viewer-pos")).toHaveText(/^24 of 24\+/);
 });
+
+test("Edit caption from a sheet opened before the list shifted still opens that photo", async ({ page }) => {
+  await page.keyboard.press("Escape");
+  await expect(viewer(page)).toHaveCount(0);
+  page.once("dialog", (d) => void d.accept());
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  await page.route("**/api/admin/photos/*", async (route) => {
+    if (route.request().method() === "DELETE") await gate;
+    await route.continue();
+  });
+  await page.locator(".card").first().getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
+  await page.locator(".card").nth(1).getByRole("button", { name: "More actions" }).click(); // B's sheet, while A's delete is pending
+  release();
+  await expect(page.locator(".card")).toHaveCount(2);
+  await page.getByRole("dialog").getByRole("button", { name: "Edit caption" }).click();
+  await expect(viewer(page).getByLabel("Caption")).toHaveValue("Second");
+  await expect(viewer(page).locator(".viewer-pos")).toHaveText("1 of 2 · Monday, Oct 5");
+});
+
+test("the caption is read-only while the next page loads, so its arrival can't discard typing", async ({ page, request }) => {
+  await page.keyboard.press("Escape");
+  await clearProject(request, "e2e-manage");
+  for (let i = 0; i < 25; i++) {
+    const m = String(59 - i).padStart(2, "0");
+    await addPhoto(request, "e2e-manage", { takenAt: `2026-10-05T08:${m}:00-05:00`, caption: `P${i}` });
+  }
+  await page.reload();
+  await page.getByLabel("Project").selectOption("e2e-manage");
+  await page.getByRole("tab", { name: "Manage" }).click();
+  await expect(page.locator(".card")).toHaveCount(24);
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  await page.route("**/api/admin/photos?*", async (route) => {
+    if (route.request().url().includes("cursor=")) await gate;
+    await route.continue();
+  });
+  await page.locator(".card-photo").nth(23).click();
+  const caption = viewer(page).getByLabel("Caption");
+  await expect(caption).toHaveValue("P23");
+  await page.keyboard.press("ArrowRight");
+  await expect(caption).toHaveJSProperty("readOnly", true); // page in flight
+  await caption.focus();
+  await page.keyboard.type(" typed");
+  expect(await caption.inputValue()).toBe("P23");
+  release();
+  await expect(viewer(page).locator(".viewer-pos")).toHaveText("25 of 25 · Monday, Oct 5");
+  await expect(caption).toHaveValue("P24");
+  await expect(caption).toHaveJSProperty("readOnly", false);
+});

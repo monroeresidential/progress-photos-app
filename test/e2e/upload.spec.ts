@@ -105,3 +105,30 @@ test("removing the last failed row ends the batch: its caption does not carry in
   expect(stored.filter((p) => p.caption === "Stale caption")).toHaveLength(1); // only the first batch's photo
 });
 
+
+test("removing the only row of an all-failed batch clears its caption", async ({ page, request }) => {
+  await page.route("**/api/admin/photos", (route) =>
+    route.request().method() === "POST" ? route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "boom" }) }) : route.continue(),
+  );
+  await library(page).setInputFiles({ name: "bad.jpg", mimeType: "image/jpeg", buffer: await jpegFromPage(page, `bad ${Date.now()}`) });
+  await page.getByLabel("Caption for this batch").fill("Stale caption");
+  await uploadButton(page).click();
+  await expect(page.locator(".queue-row .status-text.is-error")).toHaveCount(1, { timeout: 60_000 });
+  await expect(page.getByLabel("Caption for this batch")).toHaveValue("Stale caption");
+  await page.getByRole("button", { name: "Remove photo" }).click();
+  await expect(page.getByLabel("Caption for this batch")).toHaveValue("");
+  await page.unroute("**/api/admin/photos");
+
+  await library(page).setInputFiles({ name: "next.jpg", mimeType: "image/jpeg", buffer: await jpegFromPage(page, `next ${Date.now()}`) });
+  await uploadButton(page).click();
+  await expect(page.locator(".queue-summary")).toHaveText("Uploaded 1", { timeout: 60_000 });
+  expect((await adminPhotos(request, "e2e-upload")).map((p) => p.caption)).toEqual([null]);
+});
+
+test("removing a row before any upload keeps the typed caption", async ({ page }) => {
+  await library(page).setInputFiles({ name: "a.jpg", mimeType: "image/jpeg", buffer: await jpegFromPage(page, `keep ${Date.now()}`) });
+  await page.getByLabel("Caption for this batch").fill("Still mine");
+  await page.getByRole("button", { name: "Remove photo" }).click();
+  await expect(page.locator(".queue-row")).toHaveCount(0);
+  await expect(page.getByLabel("Caption for this batch")).toHaveValue("Still mine");
+});

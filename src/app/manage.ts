@@ -60,7 +60,7 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
     footer.refresh();
   }
 
-  function card(p: AdminPhoto, index: number): HTMLLIElement {
+  function card(p: AdminPhoto): HTMLLIElement {
     const selected = selection.has(p.id);
     const img = h("img", { alt: photoAlt(o.getProject().name, p), loading: "lazy", decoding: "async" });
     img.sizes = "(min-width: 600px) 560px, 100vw";
@@ -72,7 +72,7 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
         type: "button",
         class: "card-photo",
         "aria-label": selecting ? `${selected ? "Deselect" : "Select"} photo taken ${timeLabel(p.takenAt)}` : `Open photo taken ${timeLabel(p.takenAt)}`,
-        onclick: () => (selecting ? toggle(p.id) : view(index)),
+        onclick: () => (selecting ? toggle(p.id) : view(p.id)),
       },
       img,
       p.hidden ? h("span", { class: "hidden-tag" }, icon("eye-off", 14), "Hidden from site") : null,
@@ -88,7 +88,7 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
         "div",
         { class: "card-info" },
         h("div", {}, h("div", { class: "card-caption" }, p.caption ?? ""), h("div", { class: "card-meta tabular" }, meta)),
-        selecting ? h("span") : h("button", { type: "button", class: "icon-btn", "aria-label": "More actions", onclick: () => actions(p, index) }, icon("more-horizontal", 20)),
+        selecting ? h("span") : h("button", { type: "button", class: "icon-btn", "aria-label": "More actions", onclick: () => actions(p) }, icon("more-horizontal", 20)),
       ),
     );
   }
@@ -119,14 +119,13 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
   function renderBody(): void {
     const groups = groupByDay(photos);
     ordered = groups.flatMap((g) => g.photos);
-    let i = 0;
     body.replaceChildren(
       ...groups.map((g) =>
         h(
           "section",
           { class: "day" },
           h("div", { class: "day-head" }, h("h2", { class: "day-title" }, dayLabel(g.key)), h("span", { class: "day-counts tabular" }, dayCounts(g.photos))),
-          h("ul", { class: "cards" }, ...g.photos.map((p) => card(p, i++))),
+          h("ul", { class: "cards" }, ...g.photos.map((p) => card(p))),
         ),
       ),
     );
@@ -212,7 +211,10 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
     }
   }
 
-  function view(index: number): void {
+  /** Opens by id and resolves the position now: the list may have changed since the card or sheet was built. */
+  function view(id: string): void {
+    const index = ordered.findIndex((x) => x.id === id);
+    if (index < 0) return;
     viewerSync = openViewer({
       projectName: o.getProject().name,
       photos: () => ordered,
@@ -228,9 +230,9 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
     }).sync;
   }
 
-  function actions(p: AdminPhoto, index: number): void {
+  function actions(p: AdminPhoto): void {
     openSheet([
-      { label: "Edit caption", icon: "pencil", onSelect: () => view(index) },
+      { label: "Edit caption", icon: "pencil", onSelect: () => view(p.id) },
       {
         label: p.hidden ? "Unhide" : "Hide",
         icon: p.hidden ? "eye" : "eye-off",
