@@ -27,7 +27,9 @@ button, input, select { font: inherit; color: inherit; }
 
 /* Header */
 .app-header { display: flex; flex-direction: column; gap: 12px; padding: max(16px, env(safe-area-inset-top)) 20px 0; }
-.app-title { margin: 0; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 600; color: var(--brand); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-title { margin: 0; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 600; color: var(--brand); text-align: center; gap: 8px; white-space: nowrap; }
+.app-title .mark { flex-shrink: 0; }
+.app-title-text { overflow: hidden; text-overflow: ellipsis; }
 .project-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
 .project-picker { position: relative; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
 .project-picker .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

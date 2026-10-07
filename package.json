@@ -20,7 +20,6 @@
     "db:migrate:local": "wrangler d1 migrations apply progress-photos --local",
     "project:add": "node scripts/project-add.ts",
     "cleanup:orphans": "node scripts/cleanup-orphans.ts",
-    "icons": "node scripts/make-icons.ts",
     "embed:release": "node scripts/embed-release.ts"
   },
   "dependencies": {

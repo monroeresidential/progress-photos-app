@@ -46,3 +46,15 @@ test.describe("touch devices", () => {
     for (const s of sizes) expect(s).toBeGreaterThanOrEqual(16);
   });
 });
+
+test("the header shows the PP mark beside the title, and the icons are served", async ({ page, request }) => {
+  await page.goto("/");
+  const title = page.getByRole("heading", { name: "MRP Progress Photos" });
+  await expect(title.locator("svg.mark")).toHaveAttribute("aria-hidden", "true");
+  const titleColor = await title.evaluate((el) => getComputedStyle(el).color);
+  expect(await title.locator("svg.mark").evaluate((el) => getComputedStyle(el).color)).toBe(titleColor); // inherits --brand
+  for (const path of ["/favicon.svg", "/icons/favicon-32.png", "/icons/apple-touch-icon.png", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/maskable-512.png"]) {
+    expect((await request.get(path)).status(), path).toBe(200);
+  }
+  await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute("href", "/favicon.svg");
+});

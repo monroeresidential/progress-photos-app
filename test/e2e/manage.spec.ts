@@ -63,7 +63,7 @@ test.describe("phone width", () => {
         range.selectNodeContents(el);
         return new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size;
       });
-    for (const sel of [".app-title", ".day-title", ".day-counts"]) expect(await lines(sel), sel).toBe(1);
+    for (const sel of [".app-title-text", ".day-title", ".day-counts"]) expect(await lines(sel), sel).toBe(1);
     const title = (await page.locator(".day-title").first().boundingBox())!;
     const counts = (await page.locator(".day-counts").first().boundingBox())!;
     expect(counts.y).toBeLessThan(title.y + title.height); // counts sit beside the date, not under it
