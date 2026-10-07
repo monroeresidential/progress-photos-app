@@ -5,6 +5,7 @@ import { dayCounts, dayLabel, groupByDay, timeLabel } from "./days";
 import { h } from "./dom";
 import type { SelectState } from "./header";
 import { icon } from "./icons";
+import { mountSelectFooter } from "./select";
 import { openSheet } from "./sheet";
 import { openViewer } from "./viewer";
 
@@ -37,8 +38,24 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
   const footerSlot = h("div");
   container.replaceChildren(body, status, retry, more, footerSlot);
 
+  const footer = mountSelectFooter({
+    selected: () => [...selection],
+    photo: (id) => photos.find((p) => p.id === id),
+    onUpdate: (p) => {
+      selection.delete(p.id); // successes leave the selection; failures stay for a retry
+      replace(p);
+      emitSelect();
+    },
+    onRemove: (id) => removePhoto(id),
+    onMessage: (msg) => showNote(msg),
+  });
+  footer.element.hidden = true;
+  footerSlot.replaceChildren(footer.element);
+
   function emitSelect(): void {
     o.onSelectChange(selecting ? { count: selection.size, allSelected: photos.length > 0 && selection.size === photos.length } : null);
+    footer.element.hidden = !selecting;
+    footer.refresh();
   }
 
   function card(p: AdminPhoto, index: number): HTMLLIElement {
