@@ -1,5 +1,8 @@
 name: Deploy production
+# Runs after every staging deploy on main (called from ci.yml), and by hand for a redeploy.
+# The production environment requires an approval; GitHub notifies the reviewer.
 on:
+  workflow_call:
   workflow_dispatch:
 
 jobs:

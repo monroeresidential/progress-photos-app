@@ -51,7 +51,7 @@ Notes:
 5. Put the `monroeresidential.com` zone ID in `CF_ZONE_ID`. Create an API token with **Zone → Cache Purge** on that zone and run `npx wrangler secret put CF_PURGE_TOKEN` (and again with `--env staging`). Run before the first deploy, Wrangler offers to create the Worker; accept, or run this after the first CI deploy.
 6. GitHub repo secrets: `CLOUDFLARE_API_TOKEN` (Workers Scripts edit, D1 edit, R2 edit, Workers Custom Domains edit) and `CLOUDFLARE_ACCOUNT_ID`.
 7. In GitHub, create environments `staging` and `production` (Settings → Environments); add required reviewers to `production`.
-8. Pushing to `main` deploys staging; run the "Deploy production" workflow to deploy production.
+8. Pushing to `main` deploys staging, then queues production for approval: approve it from the GitHub notification ("Review deployments", web or mobile app). Run the "Deploy production" workflow by hand only to redeploy.
 
 ## Orphaned images
 

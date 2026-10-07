@@ -41,3 +41,10 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-production:
+    needs: deploy-staging
+    # Queued after staging; waits for approval in the production environment.
+    # A newer merge replaces a run still waiting (shared concurrency group), so approving always ships the latest main.
+    uses: ./.github/workflows/deploy-production.yml
+    secrets: inherit
