@@ -22,8 +22,10 @@ export function groupByDay(photos: AdminPhoto[]): DayGroup[] {
 
 const asUtcDate = (key: string) => new Date(`${key}T00:00:00Z`);
 
+/** Compact, one-line day heading: "Wed – Oct 7". */
 export function dayLabel(key: string, locale?: string): string {
-  return new Intl.DateTimeFormat(locale, { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }).format(asUtcDate(key));
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" }).format(asUtcDate(key));
+  return `${weekday} – ${monthDay(key, locale)}`;
 }
 
 export function shortDayLabel(key: string, locale?: string): string {
@@ -34,9 +36,11 @@ function monthDay(key: string, locale?: string): string {
   return new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", timeZone: "UTC" }).format(asUtcDate(key));
 }
 
+/** "3 photos", plus "· 1 hidden" only when some are hidden from the site. */
 export function dayCounts(photos: { hidden: boolean }[]): string {
-  const live = photos.filter((p) => !p.hidden).length;
-  return `${photos.length} ${photos.length === 1 ? "photo" : "photos"} · ${live} live`;
+  const hidden = photos.filter((p) => p.hidden).length;
+  const total = `${photos.length} ${photos.length === 1 ? "photo" : "photos"}`;
+  return hidden > 0 ? `${total} · ${hidden} hidden` : total;
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");

@@ -61,7 +61,7 @@ export function mountHeader(o: HeaderOptions): Header {
   const element = h(
     "header",
     { class: "app-header" },
-    h("h1", { class: "app-title" }, "Monroe Residential Progress Photos"),
+    h("h1", { class: "app-title" }, "MRP Progress Photos"),
     projectRow,
     selectRow,
     h("div", { class: "seg", role: "tablist" }, uploadTab, manageTab),
@@ -71,7 +71,7 @@ export function mountHeader(o: HeaderOptions): Header {
     if (tab === "manage") {
       right.replaceChildren(h("button", { type: "button", class: "btn btn-ghost btn-sm", onclick: () => o.onSelectStart() }, "Select"));
     } else if (safeHttp(current.siteUrl)) {
-      right.replaceChildren(h("a", { class: "btn btn-secondary btn-sm", href: current.siteUrl, target: "_blank", rel: "noopener" }, "Live site", icon("external-link", 16)));
+      right.replaceChildren(h("a", { class: "icon-btn live-link", href: current.siteUrl, target: "_blank", rel: "noopener", "aria-label": "Live site", title: "Live site" }, icon("external-link", 20)));
     } else {
       right.replaceChildren();
     }

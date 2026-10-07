@@ -25,7 +25,7 @@ test("select two, bulk hide, bulk caption, then cancel", async ({ page, request 
   await expect(page.locator(".card.is-selected")).toHaveCount(2);
 
   await page.getByRole("button", { name: "Hide" }).click();
-  await expect(page.locator(".day-counts")).toHaveText("3 photos · 1 live");
+  await expect(page.locator(".day-counts")).toHaveText("3 photos · 2 hidden");
   await expect(selectedCount(page)).toHaveText("0 selected"); // successes are deselected
 
   await page.locator(".card-photo").nth(2).click();
