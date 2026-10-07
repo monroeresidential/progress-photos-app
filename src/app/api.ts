@@ -1,4 +1,4 @@
-import type { AdminPhoto, ApiErrorBody, FeedPage, ProjectSummary } from "../shared/types";
+import type { AdminPhoto, ApiErrorBody, AreaCount, FeedPage, ProjectSummary } from "../shared/types";
 import type { Processed } from "./lib/process";
 
 export class ApiError extends Error {
@@ -52,7 +52,8 @@ export const api = {
   projects: () => request<ProjectSummary[]>("/api/admin/projects"),
   photos: (project: string, cursor?: string) =>
     request<FeedPage<AdminPhoto>>(`/api/admin/photos?project=${encodeURIComponent(project)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`),
-  patch: (id: string, body: { caption?: string | null; hidden?: boolean }) =>
+  areas: (slug: string) => request<AreaCount[]>(`/api/admin/projects/${encodeURIComponent(slug)}/areas`),
+  patch: (id: string, body: { caption?: string | null; hidden?: boolean; area?: string | null }) =>
     request<AdminPhoto>(`/api/admin/photos/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   remove: (id: string) => request<{ purged?: boolean; objectsDeleted?: boolean } | undefined>(`/api/admin/photos/${id}`, { method: "DELETE" }),
 };
@@ -84,14 +85,15 @@ export function createStallTimer(
 export function uploadPhoto(
   project: string,
   p: Processed,
-  caption: string,
+  meta: { caption: string; area: string | null },
   onProgress: (fraction: number) => void,
 ): Promise<{ id: string; duplicate?: boolean }> {
   const form = new FormData();
   form.set("project", project);
   form.set("fingerprint", p.fingerprint);
   form.set("takenAt", p.takenAt);
-  if (caption) form.set("caption", caption);
+  if (meta.caption) form.set("caption", meta.caption);
+  if (meta.area) form.set("area", meta.area);
   form.set("width", String(p.width));
   form.set("height", String(p.height));
   for (const v of p.variants) form.set(`w${v.width}`, v.blob, `${v.width}.webp`);

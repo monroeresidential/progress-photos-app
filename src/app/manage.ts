@@ -3,7 +3,10 @@ import type { AdminPhoto, ProjectSummary } from "../shared/types";
 import { api, errorMessage } from "./api";
 import { h } from "./dom";
 
-export function mountManage(container: HTMLElement, getProject: () => ProjectSummary): { reload(): void } {
+export function mountManage(
+  container: HTMLElement,
+  o: { getProject: () => ProjectSummary; onSelectChange: (s: unknown) => void },
+): { reload(): void; startSelect(): void; cancelSelect(): void; toggleAll(): void } {
   const list = h("ul");
   const status = h("p", { class: "muted", role: "status" });
   const more = h("button", { hidden: true, onclick: () => void load(false) }, "Load more");
@@ -20,7 +23,7 @@ export function mountManage(container: HTMLElement, getProject: () => ProjectSum
     more.hidden = true;
     status.textContent = "Loading…";
     try {
-      const page = await api.photos(getProject().slug, cursor ?? undefined);
+      const page = await api.photos(o.getProject().slug, cursor ?? undefined);
       if (mine !== generation) return;
       for (const p of page.photos) list.append(card(p));
       cursor = page.nextCursor;
@@ -91,5 +94,5 @@ export function mountManage(container: HTMLElement, getProject: () => ProjectSum
     return li;
   }
 
-  return { reload: () => void load(true) };
+  return { reload: () => void load(true), startSelect() {}, cancelSelect() {}, toggleAll() {} };
 }

@@ -28,7 +28,7 @@ interface Item {
   remove: HTMLButtonElement;
 }
 
-export function mountUpload(container: HTMLElement, getProject: () => ProjectSummary, onRunningChange?: (running: boolean) => void): void {
+export function mountUpload(container: HTMLElement, getProject: () => ProjectSummary, onRunningChange?: (running: boolean) => void): { projectChanged(): void } {
   const items: Item[] = [];
   let running = false;
 
@@ -121,7 +121,7 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     try {
       item.processed ??= await processPhoto(item.file);
       const caption = item.caption.value.trim() || batch;
-      const res = await uploadPhoto(project.slug, item.processed, caption, (f) => (item.progress.value = f));
+      const res = await uploadPhoto(project.slug, item.processed, { caption, area: null }, (f) => (item.progress.value = f));
       item.processed = undefined;
       setStatus(item, res.duplicate ? "duplicate" : "done");
     } catch (err) {
@@ -154,6 +154,7 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     if (batchFinished()) batchCaption.value = "";
     summary.replaceChildren(`${published} of ${items.length} published. `, (safeHttp(project.siteUrl) ? h("a", { href: project.siteUrl, target: "_blank", rel: "noopener" }, "View on site") : ""));
   }
+  return { projectChanged() {} };
 }
 
 function safeHttp(url: string): boolean {
