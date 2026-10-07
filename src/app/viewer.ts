@@ -93,17 +93,24 @@ export function openViewer(o: ViewerOptions): void {
     renderInfo();
   }
 
-  async function act(fn: () => Promise<void>): Promise<void> {
+  let busy = false;
+  let stepping = false;
+
+  async function act(btn: HTMLElement, fn: () => Promise<void>): Promise<void> {
+    if (busy || stepping) return;
+    busy = true;
     for (const b of [hideBtn, deleteBtn, saveBtn]) b.disabled = true;
     note.textContent = "";
     try {
       await fn();
     } catch (err) {
-      note.textContent = errorMessage(err);
+      if (el.isConnected) note.textContent = errorMessage(err);
     } finally {
+      busy = false;
       hideBtn.disabled = false;
       deleteBtn.disabled = false;
       if (saveBtn.textContent !== "Saved") saveBtn.disabled = !captionChanged();
+      if (el.isConnected && btn.isConnected && !(btn as HTMLButtonElement).disabled) btn.focus();
     }
   }
 
@@ -112,9 +119,11 @@ export function openViewer(o: ViewerOptions): void {
     saveBtn.disabled = !captionChanged();
   });
   saveBtn.addEventListener("click", () =>
-    void act(async () => {
-      const updated = await api.patch(current()!.id, { caption: caption.value.trim() || null });
+    void act(saveBtn, async () => {
+      const id = current()!.id;
+      const updated = await api.patch(id, { caption: caption.value.trim() || null });
       o.onUpdate(updated);
+      if (!el.isConnected || current()?.id !== id) return;
       caption.value = updated.caption ?? "";
       renderInfo();
       saveBtn.textContent = "Saved";
@@ -122,19 +131,29 @@ export function openViewer(o: ViewerOptions): void {
     }),
   );
   hideBtn.addEventListener("click", () =>
-    void act(async () => {
+    void act(hideBtn, async () => {
       const p = current()!;
-      o.onUpdate(await api.patch(p.id, { hidden: !p.hidden }));
-      renderInfo();
+      const id = p.id;
+      o.onUpdate(await api.patch(id, { hidden: !p.hidden }));
+      if (el.isConnected && current()?.id === id) renderInfo();
     }),
   );
   deleteBtn.addEventListener("click", () =>
-    void act(async () => {
+    void act(deleteBtn, async () => {
       const p = current()!;
       if (!confirm("Delete this photo? This can't be undone.")) return;
       const res = await api.remove(p.id);
       const message = deleteNote(res);
       o.onDelete(p.id, message);
+      if (o.photos().length === 0 && o.hasMore()) {
+        try {
+          await o.loadMore();
+        } catch (err) {
+          if (o.photos().length === 0) return close();
+          note.textContent = errorMessage(err);
+        }
+        if (!el.isConnected) return;
+      }
       if (o.photos().length === 0) return close();
       if (index >= o.photos().length) index = o.photos().length - 1;
       render();
@@ -144,13 +163,23 @@ export function openViewer(o: ViewerOptions): void {
   closeBtn.addEventListener("click", () => close());
 
   async function step(delta: 1 | -1): Promise<void> {
-    const n = index + delta;
-    if (n < 0) return;
-    if (n >= o.photos().length) {
+    if (busy || stepping) return;
+    if (index + delta < 0) return;
+    if (index + delta >= o.photos().length) {
       if (!o.hasMore()) return;
-      await o.loadMore();
-      if (!el.isConnected || n >= o.photos().length) return;
+      stepping = true;
+      try {
+        await o.loadMore();
+      } catch (err) {
+        if (el.isConnected) note.textContent = errorMessage(err);
+        return;
+      } finally {
+        stepping = false;
+      }
+      if (!el.isConnected) return;
     }
+    const n = index + delta;
+    if (n < 0 || n >= o.photos().length) return;
     index = n;
     render();
   }

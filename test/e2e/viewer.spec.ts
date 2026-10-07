@@ -54,3 +54,22 @@ test("deleting moves on, and deleting the last photo closes the viewer", async (
   await expect(page.locator(".manage-status")).toHaveText(/No photos yet\./);
   expect(await adminPhotos(request, "e2e-manage")).toHaveLength(0);
 });
+
+test("navigating during an in-flight save does not leak the edit into the next photo", async ({ page, request }) => {
+  await page.route("**/api/**", async (route) => {
+    if (route.request().method() === "PATCH") await new Promise((r) => setTimeout(r, 400));
+    await route.continue();
+  });
+  await viewer(page).getByLabel("Caption").fill("Edited in viewer");
+  await viewer(page).getByRole("button", { name: "Save caption" }).click();
+  await page.keyboard.press("ArrowRight");
+  await expect(viewer(page).getByRole("button", { name: "Saved" })).toBeVisible();
+  await expect(viewer(page).locator(".viewer-pos")).toHaveText("1 of 3 · Monday, Oct 5");
+  await expect(viewer(page).getByLabel("Caption")).toHaveValue("Edited in viewer");
+  await page.keyboard.press("ArrowRight");
+  await expect(viewer(page).locator(".viewer-pos")).toHaveText("2 of 3 · Monday, Oct 5");
+  await expect(viewer(page).getByLabel("Caption")).toHaveValue("Second");
+  const photos = await adminPhotos(request, "e2e-manage");
+  expect(photos.some((p) => p.caption === "Edited in viewer")).toBe(true);
+  expect(photos.some((p) => p.caption === "Second")).toBe(true);
+});
