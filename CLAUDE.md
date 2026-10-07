@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run dev` — build, then `wrangler dev` on :8787. Put `DEV_AUTH_EMAIL=…` in `.dev.vars` to use the upload app locally (honored on localhost only).
 - `npm run test:e2e` — Playwright against `npm run e2e:server` (fresh seeded local D1 in `.wrangler/e2e`).
 - Operator commands (`project:add`, `cleanup:orphans`, `embed:release`), setup and local-dev gotchas are in `README.md`.
-- Deploys: push to `main` → staging (`.github/workflows/ci.yml`); production is the manual "Deploy production" workflow. Real iPhone checks: `docs/iphone-checklist.md`.
+- Deploys: push to `main` → tests → staging → production waiting for approval (`.github/workflows/ci.yml` calls `deploy-production.yml`; the `production` environment requires a reviewer, and GitHub notifies them). "Deploy production" can also be run by hand to redeploy. Real iPhone checks on staging before approving: `docs/iphone-checklist.md`.
 
 The design spec is `docs/specs/2026-10-06-progress-photos-design.md`; the implementation plan (with deliberate deviations from the spec) is `docs/superpowers/plans/2026-10-06-progress-photos.md`.
 
