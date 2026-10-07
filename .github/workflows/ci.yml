@@ -44,7 +44,6 @@ jobs:
 
   deploy-production:
     needs: deploy-staging
-    # Queued after staging; waits for approval in the production environment.
-    # A newer merge replaces a run still waiting (shared concurrency group), so approving always ships the latest main.
+    # Queued after staging; waits for approval in the production environment (see deploy-production.yml).
     uses: ./.github/workflows/deploy-production.yml
     secrets: inherit

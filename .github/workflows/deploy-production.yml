@@ -1,15 +1,26 @@
 name: Deploy production
 # Runs after every staging deploy on main (called from ci.yml), and by hand for a redeploy.
-# The production environment requires an approval; GitHub notifies the reviewer.
 on:
   workflow_call:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  # Waits for the production environment's required reviewer (GitHub notifies them).
+  # A newer run cancels one still waiting here, so an approval always ships the latest main.
+  approve:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     environment: production
+    concurrency:
+      group: production-approval
+      cancel-in-progress: true
+    steps:
+      - run: echo "Approved ${{ github.sha }} for production"
+
+  # Never cancelled mid-run: a newer approved deploy queues behind it.
+  deploy:
+    needs: approve
+    runs-on: ubuntu-latest
     concurrency: deploy-production
     steps:
       - uses: actions/checkout@v5
