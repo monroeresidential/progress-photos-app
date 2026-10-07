@@ -89,4 +89,11 @@ describe("GET /api/feed/:project", () => {
     expect(other.status).toBe(200);
     expect(other.headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
+
+  it("never exposes area in the public feed", async () => {
+    const slug = await seedProject();
+    await seedPhoto(slug, { area: "Roof" });
+    const body = (await (await harness().call(`/api/feed/${slug}`)).json()) as { photos: Record<string, unknown>[] };
+    expect(body.photos[0]).not.toHaveProperty("area");
+  });
 });

@@ -9,6 +9,12 @@ export interface FeedPhoto {
 
 export interface AdminPhoto extends FeedPhoto {
   hidden: boolean;
+  area: string | null;
+}
+
+export interface AreaCount {
+  area: string;
+  count: number;
 }
 
 export interface FeedPage<P = FeedPhoto> {
