@@ -28,14 +28,13 @@ Make the uploader (`src/app/`) feel like a native iPhone app in Monroe's navy, a
    - the project picker being locked while uploading;
    - remembering the last-used project.
 3. An area chosen at upload is stored with each photo and shown as "8:52 AM · 4th floor" in Manage and the viewer.
-4. The public feed, the `<progress-feed>` embed and pinned embed releases are unchanged.
+4. Every photo has descriptive alt text built from the project name, area and caption, in both the uploader app and the public embed (see "Alt text"). The public feed gains `area`, which is additive, so pinned embeds `1.0.0`/`1.0.1` keep working; a new pinned release `1.0.2` uses it.
 5. All existing tests pass (rewritten where they target old markup), plus new tests for every feature above.
 
 ### Out of scope
 
 - Option 1b's grid layout.
 - An area editor in the viewer. The API accepts `area` on PATCH, but no screen uses it yet.
-- Area in the public feed or embed.
 - More than one area per photo.
 - A bulk API endpoint.
 
@@ -77,7 +76,16 @@ Existing photos keep `area = NULL`.
   - returns `[{ area: string, count: number }]`, covering all of the project's photos including hidden ones, where `area IS NOT NULL`;
   - sorted by `count DESC, area ASC`, with at most 20 entries;
   - an unknown project returns 404 `unknown_project`.
-- **Public `GET /api/feed/:project`**: unchanged. `FeedPhoto` doesn't get `area`, and `toFeedPhoto` doesn't add it.
+- **Public `GET /api/feed/:project`**: `FeedPhoto` gains `area: string | null` (added 2026-10-07 at the user's request, for alt text). The change is additive, so older pinned embeds ignore it.
+
+### Alt text (added 2026-10-07)
+
+`photoAlt(projectName, { caption, area, takenAt }, locale?)` in `src/shared/alt.ts` is used by the embed (grid images and viewer) and by the uploader app (Manage cards and the viewer).
+
+- **Format:** `{Project} – {Area} – {Caption}`, joined with an en dash surrounded by spaces. Any empty part is dropped.
+- **Repeated area:** the area is also dropped when the caption already starts with it (case-insensitive). For example, "4th floor post demolition" with the area "4th floor" gives "Birken Lofts – 4th floor post demolition".
+- **No area and no caption:** `{Project} construction progress, {Month D, YYYY}`, using the date the photo was taken (in its own offset).
+- **Examples:** "Birken Lofts – 4th floor – Post demolition"; "Birken Lofts – Lobby"; "Birken Lofts construction progress, October 5, 2026".
 
 ### Types (`src/shared/types.ts`)
 
@@ -244,7 +252,9 @@ All files live in `src/app/`. `style.css` is replaced by `theme.css`.
 - **Upload:** stores the area, after trimming; an empty value stores null; 41 characters returns 400; a duplicate keeps the original area.
 - **PATCH:** accepts an area on its own, null clears it, 41 characters returns 400.
 - **`/areas`:** ordered by count then name, includes hidden photos, excludes null, capped at 20, 404 for an unknown project, and requires Access.
-- **Admin list:** includes `area`; the public feed doesn't include `area`.
+- **Admin list:** includes `area`; the public feed includes `area` too (alt text).
+
+**Alt text:** unit tests for `photoAlt` covering every format rule, plus e2e checks that the embed's grid and viewer images and the app's Manage cards carry the expected alt text.
 
 **Unit (Vitest):**
 - `days.ts` grouping, which uses each photo's own offset as the existing embed does;
@@ -275,4 +285,4 @@ All files live in `src/app/`. `style.css` is replaced by `theme.css`.
 2. Apply migration 0002. CI runs `d1 migrations apply` before each deploy. The column is additive, so the old app keeps working during the rollout.
 3. Run the iPhone checklist on staging, then **Deploy production**.
 
-The embed is unaffected, so no new pinned release is needed.
+The embed's alt text changes, so the branch ends with pinned release `1.0.2`. After the production deploy, swap birkenlofts.com's script tag to the 1.0.2 tag.

@@ -17,7 +17,8 @@
 
 - **Branch:** `feat/app-reskin`. Never push or merge from a task.
 - **Dependencies:** none new. Icons are inline Lucide paths in `icons.ts`.
-- **Public feed and embed:** `GET /api/feed/:project`, `FeedPhoto`, `src/embed/**` and `src/app/public/embed/*` must not change. `area` never appears in the public feed.
+- **Public feed and embed:** Tasks 1–10 don't touch `GET /api/feed/:project`, `FeedPhoto`, `src/embed/**` or `src/app/public/embed/*`. Task 11 (added 2026-10-07 at the user's request) adds `area` to `FeedPhoto` (additive) and the shared alt text, and cuts pinned embed `1.0.2`. Existing `src/app/public/embed/1.0.0.js` and `1.0.1.js` must never change.
+- **Alt text:** `{Project} – {Area} – {Caption}` (en dash with spaces); empty parts dropped; area dropped when the caption already starts with it (case-insensitive); with neither: `{Project} construction progress, {Month D, YYYY}` (the date taken, in its own offset).
 - **Area:** optional, one per photo; trimmed; empty means `null`; at most 40 characters (counted in code points), otherwise `400 { error: "bad_request", message: "Area must be 40 characters or fewer" }`.
 - **`GET /api/admin/projects/:slug/areas`:**
   - returns `[{ area, count }]`;
@@ -2784,7 +2785,8 @@ Run: `VISUAL=1 npx playwright test test/e2e/visual.spec.ts --project chromium`. 
 - [ ] **Step 4: CLAUDE.md** — under "Invariants that span multiple parts", add:
 
 ```markdown
-- **`area` is admin-only.** It's stored per photo (`migrations/0002_area.sql`), returned in `AdminPhoto` and by `/api/admin/projects/:slug/areas`, and must never be added to `FeedPhoto` or the public feed — pinned embeds read that shape.
+- **`area` is stored per photo** (`migrations/0002_area.sql`) and returned in `AdminPhoto`, `FeedPhoto` and `/api/admin/projects/:slug/areas`. Feed changes must stay additive — pinned embeds read that shape.
+- **Alt text comes from one place:** `src/shared/alt.ts#photoAlt`, used by the embed and the uploader app.
 - **The upload app is vanilla TS modules on `h()`** (`src/app/`: header, upload, manage, viewer, select, sheet, icons). Pure helpers (`days.ts`, `bulk.ts`, `lib/jpeg-meta.ts#readCaptureTime`) are unit-tested; the UI is covered by Playwright specs that seed data through `test/e2e/admin-api.ts`.
 ```
 
@@ -2798,4 +2800,161 @@ Expected: everything passes. The embed size is unchanged (embed code isn't touch
 ```bash
 git add test/e2e/app-shell.spec.ts test/e2e/visual.spec.ts docs/iphone-checklist.md CLAUDE.md
 git commit -m "test(app): dark mode check and visual snapshots; docs for the reskin"
+```
+
+---
+
+### Task 11: Alt text everywhere, public `area`, embed release 1.0.2 (added 2026-10-07)
+
+The user asked for descriptive alt text on every photo ("Birken Lofts 4th floor demo progress": project + caption, with the area too) and chose to make `area` public. The spec's "Alt text" section is the authority.
+
+**Files:**
+- Create: `src/shared/alt.ts`
+- Modify: `src/shared/types.ts`, `src/worker/photos.ts`, `src/embed/progress-feed.ts`, `src/embed/viewer.ts`, `src/app/manage.ts`, `src/app/viewer.ts`, `package.json`
+- Create: `src/app/public/embed/1.0.2.js` (generated)
+- Test: `test/unit/alt.test.ts` (new), `test/worker/feed.test.ts`, `test/e2e/embed.spec.ts`, `test/e2e/manage.spec.ts`, `test/e2e/viewer.spec.ts`
+
+**Interfaces:**
+- Produces: `photoAlt(projectName: string, p: { caption: string | null; area: string | null; takenAt: string }, locale?: string): string`; `FeedPhoto.area: string | null`.
+- Consumes:
+  - `dayKey` from `src/embed/days.ts`
+  - Task 7's `mountManage` (which has `o.getProject()`)
+  - Task 8's `ViewerOptions`, which this task extends with `projectName: string`
+  - the embed's `ViewerSource` (`src/embed/viewer.ts`), which this task extends with `projectName(): string`
+
+- [ ] **Step 1: Write the failing unit test** — `test/unit/alt.test.ts`
+
+```ts
+import { describe, expect, it } from "vitest";
+import { photoAlt } from "../../src/shared/alt";
+
+const at = "2026-10-05T08:52:00-05:00";
+
+describe("photoAlt", () => {
+  it("joins project, area and caption", () => {
+    expect(photoAlt("Birken Lofts", { caption: "Post demolition", area: "4th floor", takenAt: at })).toBe("Birken Lofts – 4th floor – Post demolition");
+  });
+
+  it("drops missing parts", () => {
+    expect(photoAlt("Birken Lofts", { caption: "4th floor demo progress", area: null, takenAt: at })).toBe("Birken Lofts – 4th floor demo progress");
+    expect(photoAlt("Birken Lofts", { caption: null, area: "Lobby", takenAt: at })).toBe("Birken Lofts – Lobby");
+    expect(photoAlt("Birken Lofts", { caption: "  ", area: " ", takenAt: at })).toBe("Birken Lofts construction progress, October 5, 2026");
+  });
+
+  it("skips the area when the caption already starts with it", () => {
+    expect(photoAlt("Birken Lofts", { caption: "4th Floor post demolition", area: "4th floor", takenAt: at })).toBe("Birken Lofts – 4th Floor post demolition");
+  });
+
+  it("falls back to the date taken, in the photo's own offset", () => {
+    expect(photoAlt("Birken Lofts", { caption: null, area: null, takenAt: "2026-10-04T23:50:00-05:00" }, "en-US")).toBe(
+      "Birken Lofts construction progress, October 4, 2026",
+    );
+  });
+});
+```
+
+- [ ] **Step 2: Flip the feed test and add e2e expectations (failing)**
+
+In `test/worker/feed.test.ts`, replace the Task 1 test "never exposes area in the public feed" with:
+```ts
+  it("includes area in the public feed (used for alt text)", async () => {
+    const slug = await seedProject();
+    await seedPhoto(slug, { area: "Roof" });
+    const body = (await (await harness().call(`/api/feed/${slug}`)).json()) as { photos: Record<string, unknown>[] };
+    expect(body.photos[0]?.area).toBe("Roof");
+  });
+```
+Any existing feed test that compares a whole `FeedPhoto` with `toEqual` must now include `area: null`. Update those expectations, and nothing else.
+
+Append to `test/e2e/embed.spec.ts`:
+```ts
+test("photos carry project + caption alt text, in the grid and the viewer", async ({ page }) => {
+  await openHost(page, { project: "e2e-feed" });
+  const first = feed(page).locator(".open img").first();
+  await expect(first).toHaveAttribute("alt", `E2E Feed – <img src=x onerror="window.__xss=1">`);
+  await expect(feed(page).locator(".open img").nth(2)).toHaveAttribute("alt", "E2E Feed construction progress, September 30, 2026");
+  await feed(page).locator(".open").first().click();
+  await expect(feed(page).locator(".viewer-img")).toHaveAttribute("alt", `E2E Feed – <img src=x onerror="window.__xss=1">`);
+});
+```
+(Seed: feed index 0 is the newest photo, which carries the markup caption; index 2 has no caption. No seeded photo has an area.)
+
+Append to `test/e2e/manage.spec.ts`:
+```ts
+test("cards carry project – area – caption alt text", async ({ page }) => {
+  await expect(page.locator(".card-photo img").first()).toHaveAttribute("alt", "E2E Manage – 4th floor post demolition");
+});
+```
+(The first seeded photo's caption starts with its area, so the area is skipped: `E2E Manage – 4th floor post demolition`.)
+
+Append to `test/e2e/viewer.spec.ts`:
+```ts
+test("the viewer image has project – area – caption alt text", async ({ page }) => {
+  await expect(viewer(page).locator(".viewer-stage img")).toHaveAttribute("alt", "E2E Manage – 4th floor – First");
+});
+```
+
+- [ ] **Step 3: Run to verify they fail**
+
+Run: `npm run test:unit && npm run test:worker`
+Expected: FAIL — `src/shared/alt` is missing, and the feed has no `area`.
+
+- [ ] **Step 4: Implement**
+
+`src/shared/alt.ts`:
+```ts
+import { dayKey } from "../embed/days";
+
+/** Descriptive alt text: "{Project} – {Area} – {Caption}", dropping empty parts; falls back to the date taken. */
+export function photoAlt(projectName: string, p: { caption: string | null; area: string | null; takenAt: string }, locale?: string): string {
+  const caption = p.caption?.trim() ?? "";
+  const area = p.area?.trim() ?? "";
+  const repeatsArea = area !== "" && caption.toLocaleLowerCase().startsWith(area.toLocaleLowerCase());
+  const parts = [projectName, repeatsArea ? "" : area, caption].filter((s) => s !== "");
+  if (parts.length > 1) return parts.join(" – ");
+  const date = new Intl.DateTimeFormat(locale ?? "en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(
+    new Date(`${dayKey(p.takenAt)}T00:00:00Z`),
+  );
+  return `${projectName} construction progress, ${date}`;
+}
+```
+
+- `src/shared/types.ts`: add `area: string | null;` to `FeedPhoto`, and remove the now-redundant `area` from `AdminPhoto` (it inherits it).
+- `src/worker/photos.ts`: in `toFeedPhoto`, add `area: row.area ?? null,`. `toAdminPhoto` keeps working through the spread; drop its own `area` key.
+- `src/embed/progress-feed.ts`:
+  - add a `#projectName = ""` field;
+  - in the load handler, after `const page = (await res.json()) as FeedPage;`, set `this.#projectName = page.project.name;`;
+  - in `#append`, set `img.alt = photoAlt(this.#projectName, p);` (import `photoAlt` from `../shared/alt`);
+  - in the `new Viewer(...)` source object, add `projectName: () => this.#projectName,`.
+- `src/embed/viewer.ts`:
+  - add `projectName(): string;` to `ViewerSource`;
+  - in `#render`, set `img.alt = photoAlt(this.src.projectName(), p);`.
+- `src/app/manage.ts`:
+  - in `card()`, set the image's `alt` to `photoAlt(o.getProject().name, p)`;
+  - in `view()`, pass `projectName: o.getProject().name`.
+- `src/app/viewer.ts`:
+  - add `projectName: string` to `ViewerOptions`;
+  - in `render()`, set `img.alt = photoAlt(o.projectName, p);`.
+
+- [ ] **Step 5: Run everything**
+
+Run: `npm run typecheck && npm test && npm run build && node scripts/check-embed-size.ts && npm run test:e2e`
+Expected: all pass, and the embed stays well under 15 KB gzipped.
+
+- [ ] **Step 6: Cut pinned embed 1.0.2**
+
+Run: `npm version 1.0.2 --no-git-tag-version && npm run build && npm run embed:release`. Check:
+- `src/app/public/embed/1.0.2.js` exists;
+- `1.0.0.js` and `1.0.1.js` are byte-identical to `HEAD`;
+- a second `npm run build` gives a byte-identical `dist/app/embed.js`.
+
+Put the printed `<script … integrity=…>` tag in the report.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/shared src/worker/photos.ts src/embed src/app/manage.ts src/app/viewer.ts test
+git commit -m "feat: project – area – caption alt text everywhere; area in the public feed"
+git add package.json package-lock.json src/app/public/embed/1.0.2.js
+git commit -m "release: pinned embed 1.0.2"
 ```
