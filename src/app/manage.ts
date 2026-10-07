@@ -75,6 +75,29 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
   }
 
   function render(): void {
+    const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusId = active && body.contains(active) ? active.closest<HTMLElement>("[data-id]")?.dataset.id ?? null : null;
+    const focusMore = !!active?.closest(".icon-btn");
+    const idsBefore = ordered.map((x) => x.id);
+    renderBody();
+    if (focusId) restoreFocus(focusId, focusMore, idsBefore);
+  }
+
+  function restoreFocus(id: string, more: boolean, idsBefore: string[]): void {
+    const find = (x: string, m: boolean) => body.querySelector<HTMLElement>(`[data-id="${x}"] ${m ? ".icon-btn" : ".card-photo"}`);
+    let target = find(id, more) ?? find(id, false);
+    if (!target) {
+      const pos = idsBefore.indexOf(id);
+      const present = new Set(ordered.map((x) => x.id));
+      const next = idsBefore.slice(pos + 1).find((x) => present.has(x));
+      const prev = idsBefore.slice(0, Math.max(pos, 0)).reverse().find((x) => present.has(x));
+      const pick = next ?? prev;
+      target = pick ? find(pick, false) : null;
+    }
+    target?.focus();
+  }
+
+  function renderBody(): void {
     const groups = groupByDay(photos);
     ordered = groups.flatMap((g) => g.photos);
     let i = 0;
@@ -92,7 +115,19 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
     if (photos.length > 0 && status.textContent === "No photos yet.") status.textContent = "";
   }
 
-  async function load(reset: boolean): Promise<void> {
+  let inFlight: Promise<void> | null = null;
+
+  function load(reset: boolean): Promise<void> {
+    if (!reset && inFlight) return inFlight;
+    const p = doLoad(reset);
+    inFlight = p;
+    void p.finally(() => {
+      if (inFlight === p) inFlight = null;
+    });
+    return p;
+  }
+
+  async function doLoad(reset: boolean): Promise<void> {
     const mine = reset ? ++generation : generation;
     if (reset) {
       photos = [];

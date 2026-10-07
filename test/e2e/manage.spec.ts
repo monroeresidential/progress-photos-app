@@ -37,3 +37,14 @@ test("the ⋯ sheet deletes after confirmation", async ({ page, request }) => {
   await expect(page.locator(".day-title")).toHaveText(["Monday, October 5"]);
   expect(await adminPhotos(request, "e2e-manage")).toHaveLength(2);
 });
+
+test("focus returns to the card's More actions button after Escape and after Hide", async ({ page }) => {
+  const more = () => page.locator(".card").first().getByRole("button", { name: "More actions" });
+  await more().click();
+  await page.keyboard.press("Escape");
+  await expect(more()).toBeFocused();
+  await more().click();
+  await page.getByRole("dialog").getByRole("button", { name: "Hide" }).click();
+  await expect(page.locator(".day-counts").first()).toHaveText("2 photos · 0 live");
+  await expect(more()).toBeFocused();
+});

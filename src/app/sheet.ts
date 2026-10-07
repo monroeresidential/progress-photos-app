@@ -14,6 +14,21 @@ function present(content: HTMLElement[], onClose?: () => void): () => void {
   const backdrop = h("div", { class: "sheet-backdrop" }, sheet);
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") close();
+    if (e.key === "Tab") {
+      const items = [...sheet.querySelectorAll<HTMLElement>("button:not(:disabled), input")];
+      if (items.length === 0) return;
+      const i = items.indexOf(document.activeElement as HTMLElement);
+      if (i === -1) {
+        e.preventDefault();
+        items[0]!.focus();
+      } else if (e.shiftKey && i === 0) {
+        e.preventDefault();
+        items[items.length - 1]!.focus();
+      } else if (!e.shiftKey && i === items.length - 1) {
+        e.preventDefault();
+        items[0]!.focus();
+      }
+    }
   };
   let closed = false;
   function close(): void {
