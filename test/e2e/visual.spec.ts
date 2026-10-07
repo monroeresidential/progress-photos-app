@@ -1,7 +1,7 @@
 import { test, type Page } from "@playwright/test";
 import { addPhoto, clearProject, routeImages } from "./admin-api";
 
-// Manual check against design_handoff_progress_photos/screens/1a-*.png. Run: VISUAL=1 npx playwright test visual --project chromium
+// Manual check against the design handoff's screens/1a-*.png (removed from the tree; see git show b663f71). Run: VISUAL=1 npx playwright test visual --project chromium
 test.skip(!process.env.VISUAL, "visual snapshots are opt-in");
 
 /** Waits until every visible photo has decoded, so screenshots show pixels, not blanks. */
