@@ -1,6 +1,6 @@
 import { decodeCursor } from "../../shared/cursor";
 import type { AdminPhoto, FeedPage, ProjectSummary } from "../../shared/types";
-import { normalizeArea } from "../areas";
+import { listAreas, normalizeArea } from "../areas";
 import { normalizeCaption } from "../captions";
 import type { App, Deps } from "../env";
 import { badRequest, HttpError } from "../http";
@@ -37,6 +37,12 @@ export function registerAdmin(app: App, deps: Deps): void {
   app.get("/api/admin/projects", async (c) => {
     const rows = await listProjects(c.env.DB);
     return c.json(rows.map((p): ProjectSummary => ({ slug: p.slug, name: p.name, siteUrl: p.site_url })));
+  });
+
+  app.get("/api/admin/projects/:slug/areas", async (c) => {
+    const project = await getProject(c.env.DB, c.req.param("slug"));
+    if (!project) throw new HttpError(404, "unknown_project", "No such project");
+    return c.json(await listAreas(c.env.DB, project.slug));
   });
 
   app.get("/api/admin/photos", async (c) => {
