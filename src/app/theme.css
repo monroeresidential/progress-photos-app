@@ -124,7 +124,7 @@ section[role="tabpanel"] { flex: 1; display: flex; flex-direction: column; }
 .sheet-title { margin: 4px 0; font-size: 15px; font-weight: 600; text-align: center; }
 
 /* Viewer — always dark */
-.viewer { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; background: #00051B; color: #f2f4fa; animation: viewer-in .2s ease; touch-action: pan-y; }
+.viewer { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; background: #00051B; color: #f2f4fa; animation: viewer-in .2s ease; touch-action: pan-y pinch-zoom; }
 @keyframes viewer-in { from { opacity: 0; } }
 .viewer :focus-visible { outline-color: #f2f4fa; }
 .viewer-top { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; padding: max(12px, env(safe-area-inset-top)) 12px 0; }
@@ -148,4 +148,9 @@ section[role="tabpanel"] { flex: 1; display: flex; flex-direction: column; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* iOS zooms into any focused field under 16px; keep pinch-zoom enabled (no maximum-scale) and size fields instead. */
+@media (pointer: coarse) {
+  input, select, textarea { font-size: max(16px, 1em) !important; }
 }

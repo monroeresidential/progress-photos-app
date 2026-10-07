@@ -74,6 +74,8 @@ export function mountSelectFooter(o: SelectFooterOptions): { element: HTMLElemen
       ids,
       target ? "Hiding" : "Unhiding",
       async (id) => {
+        // Wait out an earlier single-photo Hide/Unhide first, so the cached state below is the server's final one.
+        await api.settled(id);
         const p = o.photo(id);
         if (p && p.hidden === target) return p; // already in the target state: success, no PATCH
         return api.patch(id, { hidden: target });

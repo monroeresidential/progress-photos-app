@@ -33,3 +33,15 @@ test.describe("dark mode", () => {
     await expect(page.locator("body")).toHaveCSS("color", "rgb(242, 244, 250)");
   });
 });
+
+test.describe("touch devices", () => {
+  test.use({ hasTouch: true, isMobile: true });
+  test("pinch-zoom stays enabled and fields are at least 16px, so iOS doesn't zoom on focus", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator('meta[name="viewport"]')).not.toHaveAttribute("content", /maximum-scale|user-scalable/);
+    await page.getByLabel("Project").selectOption("e2e-upload");
+    const sizes = await page.locator("input, select, textarea").evaluateAll((els) => els.map((el) => parseFloat(getComputedStyle(el).fontSize)));
+    expect(sizes.length).toBeGreaterThan(0);
+    for (const s of sizes) expect(s).toBeGreaterThanOrEqual(16);
+  });
+});

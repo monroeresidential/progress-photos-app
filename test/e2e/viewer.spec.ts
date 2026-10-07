@@ -232,3 +232,34 @@ test("the caption is read-only while the next page loads, so its arrival can't d
   await expect(caption).toHaveValue("P24");
   await expect(caption).toHaveJSProperty("readOnly", false);
 });
+
+test("after discarding a caption mid-navigation, Close still works while the next page loads", async ({ page, request }) => {
+  await page.keyboard.press("Escape");
+  await clearProject(request, "e2e-manage");
+  for (let i = 0; i < 25; i++) {
+    const m = String(59 - i).padStart(2, "0");
+    await addPhoto(request, "e2e-manage", { takenAt: `2026-10-05T08:${m}:00-05:00`, caption: `P${i}` });
+  }
+  await page.reload();
+  await page.getByLabel("Project").selectOption("e2e-manage");
+  await page.getByRole("tab", { name: "Manage" }).click();
+  await expect(page.locator(".card")).toHaveCount(24);
+  await page.route("**/api/admin/photos?*", async (route) => {
+    if (route.request().url().includes("cursor=")) await new Promise(() => {}); // never answers
+    await route.continue();
+  });
+  await page.locator(".card-photo").nth(23).click();
+  await viewer(page).getByLabel("Caption").fill("Draft to drop");
+  const prompts: string[] = [];
+  page.on("dialog", (d) => {
+    prompts.push(d.message());
+    void d.dismiss();
+  });
+  await viewer(page).getByLabel("Caption").blur(); // arrows inside the field move the cursor, not the photo
+  await page.keyboard.press("ArrowRight"); // decline saving; the next page hangs
+  await expect(viewer(page).getByLabel("Caption")).toHaveJSProperty("readOnly", true);
+  await viewer(page).getByRole("button", { name: "Close" }).click();
+  await expect(viewer(page)).toHaveCount(0);
+  expect(prompts).toEqual(["Save caption changes?"]);
+  expect((await adminPhotos(request, "e2e-manage")).some((p) => p.caption === "Draft to drop")).toBe(false);
+});

@@ -144,3 +144,31 @@ test("retrying a bulk Hide keeps the same direction and never publishes an origi
   expect(stored.find((p) => p.id === liveId)?.hidden).toBe(true);
   expect(stored.find((p) => p.id === hiddenId)?.hidden).toBe(true);
 });
+
+test("a bulk Hide waits for a pending single Unhide instead of trusting the stale hidden state", async ({ page, request }) => {
+  await page.getByRole("button", { name: "Cancel" }).click();
+  const more = (n: number) => page.locator(".card").nth(n).getByRole("button", { name: "More actions" });
+  await more(0).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Hide" }).click();
+  await expect(page.locator(".card").first()).toHaveClass(/is-hidden/);
+
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  await page.route("**/api/admin/photos/*", async (route) => {
+    const req = route.request();
+    if (req.method() === "PATCH" && req.postDataJSON()?.hidden === false) await gate;
+    await route.continue();
+  });
+  await more(0).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Unhide" }).click(); // pending
+
+  await page.getByRole("button", { name: "Select" }).click();
+  await page.locator(".card-photo").nth(0).click();
+  await page.locator(".card-photo").nth(1).click();
+  await page.getByRole("button", { name: "Hide" }).click();
+  release();
+  await expect(selectedCount(page)).toHaveText("0 selected");
+  const stored = await adminPhotos(request, "e2e-manage");
+  expect(stored.find((p) => p.caption === "One")?.hidden).toBe(true);
+  expect(stored.find((p) => p.caption === "Two")?.hidden).toBe(true);
+});

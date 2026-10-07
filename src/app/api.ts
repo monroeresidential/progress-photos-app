@@ -48,13 +48,29 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 }
 
+const inFlight = new Map<string, Set<Promise<unknown>>>();
+
+function track<T>(id: string, p: Promise<T>): Promise<T> {
+  const set = inFlight.get(id) ?? new Set();
+  inFlight.set(id, set);
+  set.add(p);
+  const done = () => {
+    set.delete(p);
+    if (set.size === 0 && inFlight.get(id) === set) inFlight.delete(id);
+  };
+  p.then(done, done);
+  return p;
+}
+
 export const api = {
   projects: () => request<ProjectSummary[]>("/api/admin/projects"),
   photos: (project: string, cursor?: string) =>
     request<FeedPage<AdminPhoto>>(`/api/admin/photos?project=${encodeURIComponent(project)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`),
   areas: (slug: string) => request<AreaCount[]>(`/api/admin/projects/${encodeURIComponent(slug)}/areas`),
   patch: (id: string, body: { caption?: string | null; hidden?: boolean; area?: string | null }) =>
-    request<AdminPhoto>(`/api/admin/photos/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+    track(id, request<AdminPhoto>(`/api/admin/photos/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })),
+  /** Resolves once every PATCH already sent for this photo has settled (and its callers have applied the result). */
+  settled: (id: string): Promise<void> => Promise.allSettled([...(inFlight.get(id) ?? [])]).then(() => {}),
   remove: (id: string) => request<{ purged?: boolean; objectsDeleted?: boolean } | undefined>(`/api/admin/photos/${id}`, { method: "DELETE" }),
 };
 

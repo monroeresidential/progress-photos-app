@@ -175,7 +175,12 @@ export function openViewer(o: ViewerOptions): { sync(): void } {
   async function canLeave(): Promise<boolean> {
     if (!captionChanged()) return true;
     if (busy || stepping) return false;
-    if (!confirm("Save caption changes?")) return true;
+    if (!confirm("Save caption changes?")) {
+      // Discarded: drop the draft now, so a later close (even mid-navigation) doesn't ask again or get blocked.
+      caption.value = current()?.caption ?? "";
+      saveBtn.disabled = true;
+      return true;
+    }
     return save();
   }
   hideBtn.addEventListener("click", () =>
@@ -272,6 +277,7 @@ export function openViewer(o: ViewerOptions): { sync(): void } {
     if (startX === null) return;
     const dx = e.clientX - startX;
     startX = null;
+    if (!e.isPrimary || (window.visualViewport?.scale ?? 1) > 1) return; // pinch-zoomed: a drag pans, it doesn't change photo
     if (Math.abs(dx) > SWIPE_PX) void step(dx < 0 ? 1 : -1);
   });
 
