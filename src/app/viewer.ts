@@ -19,12 +19,13 @@ export interface ViewerOptions {
 
 const SWIPE_PX = 50;
 
-export function openViewer(o: ViewerOptions): void {
-  let index = o.index;
+export function openViewer(o: ViewerOptions): { sync(): void } {
+  /** The displayed photo is tracked by id: Manage's array shifts under us when photos are deleted or added. */
+  let currentId = o.photos()[o.index]?.id ?? "";
+  let lastIndex = o.index;
   let renderId = 0;
   let startX: number | null = null;
   let preloads: HTMLImageElement[] = [];
-  let lastId = o.photos()[index]?.id ?? "";
 
   const pos = h("div", { class: "viewer-pos tabular", "aria-live": "polite" });
   const img = h("img", { alt: "" });
@@ -49,15 +50,19 @@ export function openViewer(o: ViewerOptions): void {
   document.documentElement.style.overflow = "hidden";
   document.body.append(el);
 
-  const current = () => o.photos()[index];
+  const indexOf = (): number => {
+    const i = o.photos().findIndex((x) => x.id === currentId);
+    if (i >= 0) lastIndex = i;
+    return i;
+  };
+  const current = () => o.photos()[indexOf()];
   const captionChanged = () => caption.value.trim() !== (current()?.caption ?? "");
 
   /** Text and buttons only; doesn't touch the image. */
   function renderInfo(): void {
     const p = current();
     if (!p) return;
-    lastId = p.id;
-    pos.textContent = `${index + 1} of ${o.photos().length}${o.hasMore() ? "+" : ""} · ${shortDayLabel(dayKey(p.takenAt))}`;
+    pos.textContent = `${indexOf() + 1} of ${o.photos().length}${o.hasMore() ? "+" : ""} · ${shortDayLabel(dayKey(p.takenAt))}`;
     when.textContent = [timeLabel(p.takenAt, true), p.area].filter(Boolean).join(" · ");
     tag.className = `status-tag${p.hidden ? " is-hidden" : ""}`;
     tag.replaceChildren(icon(p.hidden ? "eye-off" : "check", 12), p.hidden ? "Hidden" : "Live on site");
@@ -79,6 +84,7 @@ export function openViewer(o: ViewerOptions): void {
       if (id === renderId) stage.classList.remove("loading");
     };
     img.decode().then(reveal, reveal);
+    const index = indexOf();
     preloads = [index - 1, index + 1].flatMap((i) => {
       const q = o.photos()[i];
       if (!q) return [];
@@ -98,6 +104,22 @@ export function openViewer(o: ViewerOptions): void {
   let busy = false;
   let stepping = false;
 
+  /** Shows the photo now at `pos` (clamped), or closes when none are left. */
+  function moveTo(pos: number): void {
+    const list = o.photos();
+    const next = list[Math.min(pos, list.length - 1)];
+    if (!next) return close();
+    currentId = next.id;
+    render();
+  }
+
+  /** Called when Manage's list changed: follow the displayed photo by id; if it's gone, move to its neighbour. */
+  function sync(): void {
+    if (closed || busy || stepping) return;
+    if (indexOf() >= 0) renderInfo();
+    else moveTo(lastIndex);
+  }
+
   async function act(btn: HTMLElement, fn: () => Promise<void>): Promise<void> {
     if (busy || stepping) return;
     busy = true;
@@ -109,6 +131,7 @@ export function openViewer(o: ViewerOptions): void {
       if (el.isConnected) note.textContent = errorMessage(err);
     } finally {
       busy = false;
+      sync();
       hideBtn.disabled = false;
       deleteBtn.disabled = false;
       if (saveBtn.textContent !== "Saved") saveBtn.disabled = !captionChanged();
@@ -123,17 +146,22 @@ export function openViewer(o: ViewerOptions): void {
   /** Resolves true when the save went through. */
   async function save(): Promise<boolean> {
     let ok = false;
+    if (busy || stepping) return false;
+    // Read-only while in flight, so the response can't overwrite typing done after the submitted snapshot.
+    caption.readOnly = true;
     await act(saveBtn, async () => {
-      const id = current()!.id;
+      const id = currentId;
       const updated = await api.patch(id, { caption: caption.value.trim() || null });
       ok = true;
       o.onUpdate(updated);
-      if (!el.isConnected || current()?.id !== id) return;
+      if (!el.isConnected || currentId !== id) return;
       caption.value = updated.caption ?? "";
+      img.alt = photoAlt(o.projectName, updated);
       renderInfo();
       saveBtn.textContent = "Saved";
       saveBtn.disabled = true;
     });
+    caption.readOnly = false;
     return ok;
   }
   saveBtn.addEventListener("click", () => void save());
@@ -155,12 +183,13 @@ export function openViewer(o: ViewerOptions): void {
       const p = current()!;
       const id = p.id;
       o.onUpdate(await api.patch(id, { hidden: !p.hidden }));
-      if (el.isConnected && current()?.id === id) renderInfo();
+      if (el.isConnected && currentId === id) renderInfo();
     }),
   );
   deleteBtn.addEventListener("click", () =>
     void act(deleteBtn, async () => {
       const p = current()!;
+      const pos = indexOf();
       if (!confirm("Delete this photo? This can't be undone.")) return;
       const res = await api.remove(p.id);
       const message = deleteNote(res);
@@ -175,8 +204,7 @@ export function openViewer(o: ViewerOptions): void {
         if (!el.isConnected) return;
       }
       if (o.photos().length === 0) return close();
-      if (index >= o.photos().length) index = o.photos().length - 1;
-      render();
+      moveTo(pos);
       note.textContent = message;
     }),
   );
@@ -188,10 +216,10 @@ export function openViewer(o: ViewerOptions): void {
 
   async function step(delta: 1 | -1): Promise<void> {
     if (busy || stepping) return;
-    if (index + delta < 0) return;
-    const from = index;
-    if (!(await canLeave()) || !el.isConnected || index !== from) return;
-    if (index + delta >= o.photos().length) {
+    if (indexOf() + delta < 0) return;
+    const from = currentId;
+    if (!(await canLeave()) || !el.isConnected || currentId !== from) return;
+    if (indexOf() + delta >= o.photos().length) {
       if (!o.hasMore()) return;
       stepping = true;
       try {
@@ -204,9 +232,10 @@ export function openViewer(o: ViewerOptions): void {
       }
       if (!el.isConnected) return;
     }
-    const n = index + delta;
-    if (n < 0 || n >= o.photos().length) return;
-    index = n;
+    const n = indexOf() + delta;
+    const next = o.photos()[n];
+    if (n < 0 || !next) return;
+    currentId = next.id;
     render();
   }
 
@@ -253,9 +282,10 @@ export function openViewer(o: ViewerOptions): void {
     document.removeEventListener("keydown", onKey);
     el.remove();
     document.documentElement.style.overflow = savedOverflow;
-    o.returnFocus(lastId)?.focus();
+    o.returnFocus(currentId)?.focus();
   }
 
   render();
   closeBtn.focus();
+  return { sync };
 }

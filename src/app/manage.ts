@@ -35,8 +35,8 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
 
   const body = h("div", { class: "manage-body" });
   const status = h("p", { class: "manage-status", role: "status" });
-  const retry = h("button", { type: "button", class: "btn btn-secondary manage-more", hidden: true, onclick: () => void load(photos.length === 0) }, "Retry");
-  const more = h("button", { type: "button", class: "btn btn-secondary manage-more", hidden: true, onclick: () => void load(false) }, "Load more");
+  const retry = h("button", { type: "button", class: "btn btn-secondary manage-more", hidden: true, onclick: () => void load(photos.length === 0).catch(() => {}) }, "Retry");
+  const more = h("button", { type: "button", class: "btn btn-secondary manage-more", hidden: true, onclick: () => void load(false).catch(() => {}) }, "Load more");
   container.replaceChildren(body, status, retry, more);
 
   const footer = mountSelectFooter({
@@ -140,12 +140,14 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
     if (!reset && inFlight) return inFlight;
     const p = doLoad(reset);
     inFlight = p;
-    void p.finally(() => {
+    const clear = () => {
       if (inFlight === p) inFlight = null;
-    });
+    };
+    p.then(clear, clear); // handled here; callers get the rejection from `p` itself
     return p;
   }
 
+  /** Rejects when the page request fails (Manage shows its own status and Retry too), so a caller such as the viewer can report it. */
   async function doLoad(reset: boolean): Promise<void> {
     const mine = reset ? ++generation : generation;
     if (reset) {
@@ -168,6 +170,7 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
       if (mine !== generation) return;
       status.textContent = errorMessage(err);
       retry.hidden = false;
+      throw err;
     } finally {
       if (mine === generation) {
         loading = false;
@@ -178,9 +181,12 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
     }
   }
 
+  let viewerSync: (() => void) | null = null;
+
   function replace(p: AdminPhoto): void {
     photos = photos.map((x) => (x.id === p.id ? p : x));
     render();
+    viewerSync?.();
   }
 
   function removePhoto(id: string): void {
@@ -188,6 +194,7 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
     selection.delete(id);
     render();
     emitSelect();
+    viewerSync?.();
   }
 
   /** Shows a message without hiding the empty-list state. */
@@ -206,7 +213,7 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
   }
 
   function view(index: number): void {
-    openViewer({
+    viewerSync = openViewer({
       projectName: o.getProject().name,
       photos: () => ordered,
       index,
@@ -218,7 +225,7 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
         showNote(note);
       },
       returnFocus: (id: string) => body.querySelector<HTMLElement>(`[data-id="${id}"] .card-photo`),
-    });
+    }).sync;
   }
 
   function actions(p: AdminPhoto, index: number): void {
@@ -253,7 +260,7 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
   }
 
   return {
-    reload: () => void load(true),
+    reload: () => void load(true).catch(() => {}),
     isBusy: () => footer.busy(),
     startSelect() {
       selecting = true;

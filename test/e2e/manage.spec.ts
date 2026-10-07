@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { addPhoto, adminPhotos, clearProject } from "./admin-api";
+import { addPhoto, adminPhotos, clearProject, routeImages } from "./admin-api";
 
 test.skip(({ browserName }) => browserName !== "chromium", "app tests run in Chromium");
 
 test.beforeEach(async ({ page, request }) => {
+  await routeImages(page);
   await clearProject(request, "e2e-manage");
   await addPhoto(request, "e2e-manage", { takenAt: "2026-10-05T08:52:00-05:00", caption: "4th floor post demolition", area: "4th floor" });
   await addPhoto(request, "e2e-manage", { takenAt: "2026-10-05T08:51:00-05:00", caption: "Hidden one", hidden: true });

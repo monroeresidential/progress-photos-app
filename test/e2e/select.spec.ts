@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { addPhoto, adminPhotos, clearProject } from "./admin-api";
+import { addPhoto, adminPhotos, clearProject, routeImages } from "./admin-api";
 
 test.skip(({ browserName }) => browserName !== "chromium", "app tests run in Chromium");
 
 test.beforeEach(async ({ page, request }) => {
+  await routeImages(page);
   await clearProject(request, "e2e-manage");
   for (const [t, c] of [["08:52", "One"], ["08:51", "Two"], ["08:50", "Three"]] as const) {
     await addPhoto(request, "e2e-manage", { takenAt: `2026-10-05T${t}:00-05:00`, caption: c });
@@ -109,4 +110,37 @@ test("bulk caption with an empty field asks before clearing; cancel aborts", asy
   await page.getByRole("button", { name: "Apply to 1 photo" }).click();
   await expect.poll(() => prompts).toEqual(["Clear captions on 1 photo?"]);
   expect((await adminPhotos(request, "e2e-manage")).filter((p) => p.caption)).toHaveLength(3);
+});
+
+test("retrying a bulk Hide keeps the same direction and never publishes an originally hidden photo", async ({ page, request }) => {
+  await clearProject(request, "e2e-manage");
+  const hiddenId = await addPhoto(request, "e2e-manage", { takenAt: "2026-10-05T08:52:00-05:00", caption: "A hidden", hidden: true });
+  const liveId = await addPhoto(request, "e2e-manage", { takenAt: "2026-10-05T08:51:00-05:00", caption: "B live" });
+  await page.reload();
+  await page.getByLabel("Project").selectOption("e2e-manage");
+  await page.getByRole("tab", { name: "Manage" }).click();
+  await page.getByRole("button", { name: "Select" }).click();
+  const patched: string[] = [];
+  await page.route("**/api/admin/photos/*", (route) => {
+    if (route.request().method() !== "PATCH") return route.continue();
+    patched.push(route.request().url().split("/").pop()!);
+    if (route.request().url().endsWith(`/${liveId}`)) return route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "boom" }) });
+    return route.continue();
+  });
+  await page.locator(".card-photo").nth(0).click(); // A (hidden)
+  await page.locator(".card-photo").nth(1).click(); // B (live)
+  await page.getByRole("button", { name: "Hide" }).click();
+  await expect(page.locator(".manage-status")).toContainText("couldn't be updated");
+  expect(patched).toEqual([liveId]); // A is skipped, no PATCH
+  await expect(selectedCount(page)).toHaveText("1 selected");
+  await expect(page.locator(".card.is-selected")).toHaveAttribute("data-id", liveId);
+  await expect(page.getByRole("button", { name: "Hide" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Unhide" })).toHaveCount(0);
+
+  await page.unroute("**/api/admin/photos/*");
+  await page.getByRole("button", { name: "Hide" }).click();
+  await expect(selectedCount(page)).toHaveText("0 selected");
+  const stored = await adminPhotos(request, "e2e-manage");
+  expect(stored.find((p) => p.id === liveId)?.hidden).toBe(true);
+  expect(stored.find((p) => p.id === hiddenId)?.hidden).toBe(true);
 });

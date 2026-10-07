@@ -19,6 +19,9 @@ const plural = (n: number) => `${n} ${n === 1 ? "photo" : "photos"}`;
 
 export function mountSelectFooter(o: SelectFooterOptions): { element: HTMLElement; refresh(): void; busy(): boolean } {
   let busy = false;
+  /** The direction (true = Hide) of the last Hide/Unhide run while failures remain selected, so a retry goes the same way. */
+  let pending: boolean | null = null;
+  let pendingKey: string | null = null;
   const progress = h("p", { class: "select-progress tabular", role: "status" });
   const hideBtn = h("button", { type: "button", class: "btn btn-secondary" });
   const captionBtn = h("button", { type: "button", class: "btn btn-secondary" }, icon("pencil", 18), "Caption");
@@ -31,7 +34,9 @@ export function mountSelectFooter(o: SelectFooterOptions): { element: HTMLElemen
   };
 
   function refresh(): void {
-    const unhide = allHidden();
+    // The selection changed by the user (not by our own run): the remembered direction no longer applies.
+    if (pending !== null && pendingKey !== null && pendingKey !== o.selected().join(",")) pending = pendingKey = null;
+    const unhide = !(pending ?? !allHidden());
     hideBtn.replaceChildren(icon(unhide ? "eye" : "eye-off", 18), unhide ? "Unhide" : "Hide");
     for (const b of [hideBtn, captionBtn, deleteBtn]) b.disabled = busy || o.selected().length === 0;
   }
@@ -62,8 +67,23 @@ export function mountSelectFooter(o: SelectFooterOptions): { element: HTMLElemen
 
   hideBtn.addEventListener("click", async () => {
     const ids = o.selected();
-    const target = !allHidden();
-    say(await bulk(ids, target ? "Hiding" : "Unhiding", (id) => api.patch(id, { hidden: target }), (_, p) => o.onUpdate(p)));
+    const target = pending ?? !allHidden();
+    pending = target;
+    pendingKey = null; // our own updates below mustn't read as a user change
+    const failure = await bulk(
+      ids,
+      target ? "Hiding" : "Unhiding",
+      async (id) => {
+        const p = o.photo(id);
+        if (p && p.hidden === target) return p; // already in the target state: success, no PATCH
+        return api.patch(id, { hidden: target });
+      },
+      (_, p) => o.onUpdate(p),
+    );
+    if (failure) pendingKey = o.selected().join(",");
+    else pending = pendingKey = null;
+    refresh();
+    say(failure);
   });
   captionBtn.addEventListener("click", async () => {
     const ids = o.selected();

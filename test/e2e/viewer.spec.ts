@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { addPhoto, adminPhotos, clearProject } from "./admin-api";
+import { addPhoto, adminPhotos, clearProject, routeImages } from "./admin-api";
 
 test.skip(({ browserName }) => browserName !== "chromium", "app tests run in Chromium");
 
 test.beforeEach(async ({ page, request }) => {
+  await routeImages(page);
   await clearProject(request, "e2e-manage");
   await addPhoto(request, "e2e-manage", { takenAt: "2026-10-05T08:52:00-05:00", caption: "First", area: "4th floor" });
   await addPhoto(request, "e2e-manage", { takenAt: "2026-10-05T08:51:57-05:00", caption: "Second" });
@@ -104,4 +105,79 @@ test("closing with an unsaved caption and dismissing the prompt discards it", as
   await page.keyboard.press("Escape");
   await expect(viewer(page)).toHaveCount(0);
   expect((await adminPhotos(request, "e2e-manage")).some((p) => p.caption === "Thrown away")).toBe(false);
+});
+
+test("the viewer keeps acting on its displayed photo when Manage's list shifts underneath it", async ({ page, request }) => {
+  await page.keyboard.press("Escape");
+  await expect(viewer(page)).toHaveCount(0);
+  page.once("dialog", (d) => void d.accept());
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  await page.route("**/api/admin/photos/*", async (route) => {
+    if (route.request().method() === "DELETE") await gate;
+    await route.continue();
+  });
+  await page.locator(".card").first().getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
+  await page.locator(".card-photo").nth(1).click(); // B, while A's delete is pending
+  await expect(viewer(page).getByLabel("Caption")).toHaveValue("Second");
+  release();
+  await expect(page.locator(".card")).toHaveCount(2);
+  await expect(viewer(page).getByLabel("Caption")).toHaveValue("Second");
+  await expect(viewer(page).locator(".viewer-pos")).toHaveText("1 of 2 · Monday, Oct 5");
+  await viewer(page).getByRole("button", { name: "Hide" }).click();
+  await expect(viewer(page).locator(".status-tag")).toHaveText("Hidden");
+  const photos = await adminPhotos(request, "e2e-manage");
+  expect(photos.find((p) => p.caption === "Second")?.hidden).toBe(true);
+  expect(photos.find((p) => p.caption === "Third")?.hidden).toBe(false);
+});
+
+test("the caption is read-only while a save is in flight, so the response can't discard typing", async ({ page }) => {
+  await page.route("**/api/admin/photos/*", async (route) => {
+    if (route.request().method() === "PATCH") await new Promise((r) => setTimeout(r, 600));
+    await route.continue();
+  });
+  const caption = viewer(page).getByLabel("Caption");
+  await caption.fill("First draft");
+  await viewer(page).getByRole("button", { name: "Save caption" }).click();
+  await expect(caption).toHaveJSProperty("readOnly", true); // in flight
+  await caption.focus();
+  await page.keyboard.type(" and more");
+  expect(await caption.inputValue()).toBe("First draft");
+  await expect(viewer(page).getByRole("button", { name: "Saved" })).toBeVisible();
+  await expect(caption).toHaveValue("First draft");
+  await expect(caption).toHaveJSProperty("readOnly", false);
+});
+
+test("the viewer image alt follows a saved caption", async ({ page }) => {
+  const img = viewer(page).locator(".viewer-stage img");
+  await viewer(page).getByLabel("Caption").fill("Fresh caption");
+  await viewer(page).getByRole("button", { name: "Save caption" }).click();
+  await expect(viewer(page).getByRole("button", { name: "Saved" })).toBeVisible();
+  await expect(img).toHaveAttribute("alt", "E2E Manage – 4th floor – Fresh caption");
+  await viewer(page).getByLabel("Caption").fill("");
+  await viewer(page).getByRole("button", { name: "Save caption" }).click();
+  await expect(viewer(page).getByRole("button", { name: "Saved" })).toBeVisible();
+  await expect(img).toHaveAttribute("alt", "E2E Manage – 4th floor");
+});
+
+test("a failed next-page load shows its error in the viewer", async ({ page, request }) => {
+  await page.keyboard.press("Escape");
+  await clearProject(request, "e2e-manage");
+  for (let i = 0; i < 25; i++) {
+    const m = String(59 - i).padStart(2, "0");
+    await addPhoto(request, "e2e-manage", { takenAt: `2026-10-05T08:${m}:00-05:00`, caption: `P${i}` });
+  }
+  await page.reload();
+  await page.getByLabel("Project").selectOption("e2e-manage");
+  await page.getByRole("tab", { name: "Manage" }).click();
+  await expect(page.locator(".card")).toHaveCount(24);
+  await page.route("**/api/admin/photos?*", (route) =>
+    route.request().url().includes("cursor=") ? route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "page boom" }) }) : route.continue(),
+  );
+  await page.locator(".card-photo").nth(23).click();
+  await expect(viewer(page).locator(".viewer-pos")).toHaveText(/^24 of 24\+/);
+  await page.keyboard.press("ArrowRight");
+  await expect(viewer(page).locator(".viewer-note")).toHaveText(/page boom|500/);
+  await expect(viewer(page).locator(".viewer-pos")).toHaveText(/^24 of 24\+/);
 });

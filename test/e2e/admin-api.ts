@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { APIRequestContext, Page } from "@playwright/test";
+import { solidPng } from "../../scripts/lib/png.ts";
 
 /** Minimal lossy-WebP header the Worker accepts (it validates headers, not pixels). */
 export function fakeWebp(width: number, height: number): Buffer {
@@ -73,4 +74,10 @@ export async function jpegFromPage(page: Page, text: string): Promise<Buffer> {
     return btoa(s);
   }, text);
   return Buffer.from(b64, "base64");
+}
+
+/** The API fixtures store a fake WebP; serve a real decodable image for `/img/**` so app screens and screenshots show photos. */
+export async function routeImages(page: Page): Promise<void> {
+  const body = solidPng(480, 360, [96, 128, 160]);
+  await page.route("**/img/**", (route) => route.fulfill({ contentType: "image/png", body }));
 }

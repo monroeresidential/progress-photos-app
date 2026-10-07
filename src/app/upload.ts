@@ -180,6 +180,12 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     return items.length > 0 && items.every((i) => i.status === "done" || i.status === "duplicate" || i.status === "unreadable");
   }
 
+  /** When every remaining row is settled, the batch is over: its caption doesn't carry to the next one (the area does). */
+  function finishBatchIfDone(): void {
+    if (!running && batchFinished()) batchCaption.value = "";
+    refresh();
+  }
+
   function refresh(): void {
     const ready = items.filter((i) => i.status === "ready").length;
     uploadBtn.disabled = running || ready === 0;
@@ -245,7 +251,7 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
       const i = items.indexOf(item);
       if (i >= 0) items.splice(i, 1);
       dropRow(item);
-      refresh();
+      finishBatchIfDone();
     });
     queue.append(row);
     setStatus(item, "ready");
@@ -317,8 +323,7 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     }
     running = false;
     onRunningChange?.(false);
-    if (batchFinished()) batchCaption.value = "";
-    refresh();
+    finishBatchIfDone();
     void loadAreas();
   }
 

@@ -75,3 +75,33 @@ test("a per-photo caption overrides the batch caption; Remove drops a row", asyn
   await expect(page.locator(".queue-summary")).toHaveText("Uploaded 2", { timeout: 60_000 });
   expect((await adminPhotos(request, "e2e-upload")).map((p) => p.caption).sort()).toEqual(["Batch", "Own caption"]);
 });
+
+test("removing the last failed row ends the batch: its caption does not carry into the next batch", async ({ page, request }) => {
+  const okJpeg = await jpegFromPage(page, `ok ${Date.now()}`);
+  const badJpeg = await jpegFromPage(page, `bad ${Date.now()}`);
+  let posts = 0;
+  await page.route("**/api/admin/photos", (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    posts++;
+    if (posts === 2) return route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "boom" }) });
+    return route.continue();
+  });
+  await library(page).setInputFiles([
+    { name: "ok.jpg", mimeType: "image/jpeg", buffer: okJpeg },
+    { name: "bad.jpg", mimeType: "image/jpeg", buffer: badJpeg },
+  ]);
+  await page.getByLabel("Caption for this batch").fill("Stale caption");
+  await uploadButton(page).click();
+  await expect(page.locator(".queue-row .status-text.is-error")).toHaveCount(1, { timeout: 60_000 });
+  await expect(page.getByLabel("Caption for this batch")).toHaveValue("Stale caption");
+  await page.getByRole("button", { name: "Remove photo" }).click();
+  await expect(page.getByLabel("Caption for this batch")).toHaveValue("");
+
+  await library(page).setInputFiles({ name: "next.jpg", mimeType: "image/jpeg", buffer: await jpegFromPage(page, `next ${Date.now()}`) });
+  await uploadButton(page).click();
+  await expect(page.locator(".queue-summary")).toHaveText("Uploaded 1", { timeout: 60_000 });
+  const stored = await adminPhotos(request, "e2e-upload");
+  expect(stored).toHaveLength(2);
+  expect(stored.filter((p) => p.caption === "Stale caption")).toHaveLength(1); // only the first batch's photo
+});
+
