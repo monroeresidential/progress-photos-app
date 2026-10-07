@@ -188,7 +188,7 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     const uploading = items.filter((i) => i.status === "working").length;
     const active = items.some((i) => i.status === "ready" || i.status === "working");
     if (!active && finished.done + finished.duplicate > 0) {
-      const k = shown.length;
+      const k = shown.filter((i) => i.status !== "done" && i.status !== "duplicate").length;
       summary.textContent = `Uploaded ${finished.done}${finished.duplicate ? ` · ${finished.duplicate} already uploaded` : ""}${k ? ` · ${k} need attention` : ""}`;
       range.textContent = "";
     } else if (shown.length > 0) {
@@ -267,10 +267,14 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     refresh();
     for (const item of added) {
       // One at a time keeps iOS memory down.
+      if (!items.includes(item)) continue;
       item.takenAt = await captureTime(item.file);
       refresh();
       const url = await makeThumb(item.file);
-      if (url) item.thumb.src = url;
+      if (url) {
+        if (items.includes(item) && item.row.isConnected) item.thumb.src = url;
+        else URL.revokeObjectURL(url);
+      }
     }
   }
 
