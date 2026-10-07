@@ -24,3 +24,12 @@ test("remembers the last project", async ({ page }) => {
   await page.reload();
   await expect(page.getByLabel("Project")).toHaveValue("e2e-manage");
 });
+
+test.describe("dark mode", () => {
+  test.use({ colorScheme: "dark" });
+  test("uses the navy background and light text", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator("body")).toHaveCSS("background-color", "rgb(0, 5, 27)");
+    await expect(page.locator("body")).toHaveCSS("color", "rgb(242, 244, 250)");
+  });
+});
