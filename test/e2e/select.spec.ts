@@ -83,3 +83,30 @@ test("a failed photo stays selected with a retry message; retrying succeeds and 
   await expect(selectedCount(page)).toHaveText("0 selected");
   await expect(page.locator(".manage-status")).not.toContainText("couldn't be updated");
 });
+
+test("the bulk bar stays in the viewport on a long list", async ({ page, request }) => {
+  await clearProject(request, "e2e-manage");
+  for (let i = 0; i < 8; i++) {
+    await addPhoto(request, "e2e-manage", { takenAt: `2026-10-05T08:${10 + i}:00-05:00`, caption: `P${i}` });
+  }
+  await page.reload();
+  await page.getByLabel("Project").selectOption("e2e-manage");
+  await page.getByRole("tab", { name: "Manage" }).click();
+  await page.getByRole("button", { name: "Select" }).click();
+  await page.locator(".card-photo").first().click();
+  await expect(page.getByRole("button", { name: "Hide" })).toBeInViewport();
+});
+
+test("bulk caption with an empty field asks before clearing; cancel aborts", async ({ page, request }) => {
+  const prompts: string[] = [];
+  page.on("dialog", (d) => {
+    prompts.push(d.message());
+    void d.dismiss();
+  });
+  await page.locator(".card-photo").nth(0).click();
+  await page.getByRole("button", { name: "Caption" }).click();
+  await page.getByRole("dialog").getByRole("textbox").fill("   ");
+  await page.getByRole("button", { name: "Apply to 1 photo" }).click();
+  await expect.poll(() => prompts).toEqual(["Clear captions on 1 photo?"]);
+  expect((await adminPhotos(request, "e2e-manage")).filter((p) => p.caption)).toHaveLength(3);
+});

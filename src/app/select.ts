@@ -70,6 +70,7 @@ export function mountSelectFooter(o: SelectFooterOptions): { element: HTMLElemen
     if (ids.length === 0) return;
     const text = await promptSheet({ title: `Caption for ${plural(ids.length)}`, confirm: `Apply to ${plural(ids.length)}` });
     if (text === null) return;
+    if (!text.trim() && !confirm(`Clear captions on ${plural(ids.length)}?`)) return;
     say(await bulk(ids, "Updating", (id) => api.patch(id, { caption: text.trim() || null }), (_, p) => o.onUpdate(p)));
   });
   deleteBtn.addEventListener("click", async () => {
@@ -80,7 +81,11 @@ export function mountSelectFooter(o: SelectFooterOptions): { element: HTMLElemen
     const failure = await bulk(
       ids,
       "Deleting",
-      (id) => api.remove(id),
+      (id) =>
+        api.remove(id).catch((err: unknown) => {
+          if (err instanceof ApiError && err.status === 404) return undefined; // already deleted elsewhere
+          throw err;
+        }),
       (id, res) => {
         o.onRemove(id);
         const note = deleteNote(res);

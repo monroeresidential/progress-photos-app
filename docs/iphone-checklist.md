@@ -26,4 +26,7 @@ Run on a real iPhone in Safari against https://progress-staging.monroeresidentia
 - [ ] Manage: day headers with "N photos · M live"; hidden photos dimmed with "Hidden from site".
 - [ ] Viewer: swipe between photos; Save caption; Hide/Unhide; Delete asks first and moves on.
 - [ ] Select: tick several, bulk Hide, bulk Caption, bulk Delete (one confirmation).
+- [ ] Tapping into "+ Add", a photo caption or the viewer caption doesn't zoom the page.
+- [ ] In Select mode, the Hide / Caption / Delete bar stays at the bottom while scrolling.
+- [ ] Type a new area with "+ Add" and tap Upload straight away — the photos get that area.
 - [ ] Project title picker opens the native picker; it's locked while uploading.

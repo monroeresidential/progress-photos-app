@@ -8,9 +8,9 @@ export interface SheetAction {
   onSelect(): void;
 }
 
-function present(content: HTMLElement[], onClose?: () => void): () => void {
+function present(content: HTMLElement[], label: string, onClose?: () => void): () => void {
   const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  const sheet = h("div", { class: "sheet", role: "dialog", "aria-modal": "true" }, ...content);
+  const sheet = h("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-label": label }, ...content);
   const backdrop = h("div", { class: "sheet-backdrop" }, sheet);
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") close();
@@ -53,7 +53,7 @@ export function openSheet(actions: SheetAction[]): void {
     h("button", { type: "button", class: `btn btn-secondary${a.danger ? " btn-danger" : ""}` }, a.icon ? icon(a.icon, 18) : null, a.label),
   );
   const cancel = h("button", { type: "button", class: "btn btn-ghost" }, "Cancel");
-  const close = present([...buttons, cancel]);
+  const close = present([...buttons, cancel], "Photo actions");
   buttons.forEach((b, i) =>
     b.addEventListener("click", () => {
       close();
@@ -76,7 +76,7 @@ export function promptSheet(o: { title: string; confirm: string; initial?: strin
       h("button", { type: "submit", class: "btn btn-primary" }, o.confirm),
       cancel,
     );
-    const close = present([form], () => resolve(result));
+    const close = present([form], o.title, () => resolve(result));
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       result = input.value;

@@ -61,6 +61,7 @@ async function start(): Promise<void> {
   const manage = mountManage(managePane, { getProject: () => current, onSelectChange: header.setSelect });
 
   function show(t: Tab): void {
+    if (t === "upload" && manage.isBusy()) return;
     if (t === "upload") manage.cancelSelect();
     const enteringManage = t === "manage" && managePane.hidden;
     uploadPane.hidden = t !== "upload";

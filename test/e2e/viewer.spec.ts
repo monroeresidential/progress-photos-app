@@ -77,3 +77,31 @@ test("navigating during an in-flight save does not leak the edit into the next p
 test("the viewer image has project – area – caption alt text", async ({ page }) => {
   await expect(viewer(page).locator(".viewer-stage img")).toHaveAttribute("alt", "E2E Manage – 4th floor – First");
 });
+
+test("Enter in the caption input saves", async ({ page, request }) => {
+  await viewer(page).getByLabel("Caption").fill("Saved by Enter");
+  await viewer(page).getByLabel("Caption").press("Enter");
+  await expect(viewer(page).getByRole("button", { name: "Saved" })).toBeVisible();
+  expect((await adminPhotos(request, "e2e-manage")).some((p) => p.caption === "Saved by Enter")).toBe(true);
+});
+
+test("closing with an unsaved caption and accepting the prompt saves it", async ({ page, request }) => {
+  const messages: string[] = [];
+  page.once("dialog", (d) => {
+    messages.push(d.message());
+    void d.accept();
+  });
+  await viewer(page).getByLabel("Caption").fill("Saved on close");
+  await page.keyboard.press("Escape");
+  await expect(viewer(page)).toHaveCount(0);
+  expect(messages).toEqual(["Save caption changes?"]);
+  expect((await adminPhotos(request, "e2e-manage")).some((p) => p.caption === "Saved on close")).toBe(true);
+});
+
+test("closing with an unsaved caption and dismissing the prompt discards it", async ({ page, request }) => {
+  page.once("dialog", (d) => void d.dismiss());
+  await viewer(page).getByLabel("Caption").fill("Thrown away");
+  await page.keyboard.press("Escape");
+  await expect(viewer(page)).toHaveCount(0);
+  expect((await adminPhotos(request, "e2e-manage")).some((p) => p.caption === "Thrown away")).toBe(false);
+});

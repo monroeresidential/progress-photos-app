@@ -20,6 +20,7 @@ export interface ManageTab {
   startSelect(): void;
   cancelSelect(): void;
   toggleAll(): void;
+  isBusy(): boolean;
 }
 
 export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab {
@@ -36,8 +37,7 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
   const status = h("p", { class: "manage-status", role: "status" });
   const retry = h("button", { type: "button", class: "btn btn-secondary manage-more", hidden: true, onclick: () => void load(photos.length === 0) }, "Retry");
   const more = h("button", { type: "button", class: "btn btn-secondary manage-more", hidden: true, onclick: () => void load(false) }, "Load more");
-  const footerSlot = h("div");
-  container.replaceChildren(body, status, retry, more, footerSlot);
+  container.replaceChildren(body, status, retry, more);
 
   const footer = mountSelectFooter({
     selected: () => [...selection],
@@ -51,7 +51,8 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
     onMessage: (msg) => showNote(msg),
   });
   footer.element.hidden = true;
-  footerSlot.replaceChildren(footer.element);
+  // Direct child of the flex-column container so position: sticky pins to the viewport bottom.
+  container.append(footer.element);
 
   function emitSelect(): void {
     o.onSelectChange(selecting ? { count: selection.size, allSelected: photos.length > 0 && selection.size === photos.length } : null);
@@ -253,6 +254,7 @@ export function mountManage(container: HTMLElement, o: ManageOptions): ManageTab
 
   return {
     reload: () => void load(true),
+    isBusy: () => footer.busy(),
     startSelect() {
       selecting = true;
       selection.clear();

@@ -120,18 +120,36 @@ export function openViewer(o: ViewerOptions): void {
     saveBtn.textContent = "Save caption";
     saveBtn.disabled = !captionChanged();
   });
-  saveBtn.addEventListener("click", () =>
-    void act(saveBtn, async () => {
+  /** Resolves true when the save went through. */
+  async function save(): Promise<boolean> {
+    let ok = false;
+    await act(saveBtn, async () => {
       const id = current()!.id;
       const updated = await api.patch(id, { caption: caption.value.trim() || null });
+      ok = true;
       o.onUpdate(updated);
       if (!el.isConnected || current()?.id !== id) return;
       caption.value = updated.caption ?? "";
       renderInfo();
       saveBtn.textContent = "Saved";
       saveBtn.disabled = true;
-    }),
-  );
+    });
+    return ok;
+  }
+  saveBtn.addEventListener("click", () => void save());
+  caption.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    if (!saveBtn.disabled) void save();
+  });
+
+  /** True when it's fine to leave this photo: nothing unsaved, or the user chose save (and it worked) or discard. */
+  async function canLeave(): Promise<boolean> {
+    if (!captionChanged()) return true;
+    if (busy || stepping) return false;
+    if (!confirm("Save caption changes?")) return true;
+    return save();
+  }
   hideBtn.addEventListener("click", () =>
     void act(hideBtn, async () => {
       const p = current()!;
@@ -162,11 +180,17 @@ export function openViewer(o: ViewerOptions): void {
       note.textContent = message;
     }),
   );
-  closeBtn.addEventListener("click", () => close());
+  closeBtn.addEventListener("click", () => void tryClose());
+
+  async function tryClose(): Promise<void> {
+    if (await canLeave() && el.isConnected) close();
+  }
 
   async function step(delta: 1 | -1): Promise<void> {
     if (busy || stepping) return;
     if (index + delta < 0) return;
+    const from = index;
+    if (!(await canLeave()) || !el.isConnected || index !== from) return;
     if (index + delta >= o.photos().length) {
       if (!o.hasMore()) return;
       stepping = true;
@@ -189,7 +213,7 @@ export function openViewer(o: ViewerOptions): void {
   function onKey(e: KeyboardEvent): void {
     if (e.key === "Escape") {
       e.preventDefault();
-      close();
+      void tryClose();
     } else if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && e.target !== caption) {
       e.preventDefault();
       void step(e.key === "ArrowRight" ? 1 : -1);
