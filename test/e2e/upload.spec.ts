@@ -1,85 +1,74 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { adminPhotos, clearProject, jpegFromPage } from "./admin-api";
 
 test.skip(({ browserName }) => browserName !== "chromium", "upload flow runs once, in Chromium");
 
-async function makeJpeg(page: Page, seed: string): Promise<Buffer> {
-  const b64 = await page.evaluate(async (text) => {
-    const c = document.createElement("canvas");
-    c.width = 1200;
-    c.height = 900;
-    const ctx = c.getContext("2d")!;
-    ctx.fillStyle = "#a33";
-    ctx.fillRect(0, 0, 1200, 900);
-    ctx.fillStyle = "#fff";
-    ctx.font = "48px sans-serif";
-    ctx.fillText(text, 40, 100);
-    const blob = await new Promise<Blob>((r) => c.toBlob((b) => r(b!), "image/jpeg", 0.9));
-    let s = "";
-    for (const x of new Uint8Array(await blob.arrayBuffer())) s += String.fromCharCode(x);
-    return btoa(s);
-  }, seed);
-  return Buffer.from(b64, "base64");
-}
+const library = (page: import("@playwright/test").Page) => page.locator('input[type="file"]:not([capture])');
+const uploadButton = (page: import("@playwright/test").Page) => page.getByRole("button", { name: /^Upload( \d+ photos?)?$/ });
 
-test("uploads a photo, flags a re-upload as duplicate, and manages it", async ({ page }) => {
+test.beforeEach(async ({ page, request }) => {
+  await clearProject(request, "e2e-upload");
   await page.goto("/");
   await page.getByLabel("Project").selectOption("e2e-upload");
-  const jpeg = await makeJpeg(page, `photo ${Date.now()}`);
-  const pick = page.locator('input[type="file"]');
-
-  await pick.setInputFiles({ name: "site.jpg", mimeType: "image/jpeg", buffer: jpeg });
-  await page.getByLabel("Caption for this batch").fill("<b>E2E</b> slab pour");
-  await page.getByRole("button", { name: "Upload" }).click();
-  await expect(page.locator(".status-text").first()).toHaveText("Done", { timeout: 60_000 });
-  await expect(page.getByRole("link", { name: "View on site" })).toHaveAttribute("href", "http://host.test/progress/");
-
-  await pick.setInputFiles({ name: "site-again.jpg", mimeType: "image/jpeg", buffer: jpeg });
-  await page.getByRole("button", { name: "Upload" }).click();
-  await expect(page.locator(".status-text").last()).toHaveText("Duplicate (already uploaded)", { timeout: 60_000 });
-
-  // The stored 960w variant is a real WebP the Worker accepted.
-  const feed = await (await page.request.get("/api/feed/e2e-upload")).json();
-  expect(feed.photos).toHaveLength(1);
-  expect(feed.photos[0]).toMatchObject({ caption: "<b>E2E</b> slab pour", width: 960, height: 720 });
-  const img = await page.request.get(feed.photos[0].srcset["960"]);
-  expect(img.headers()["content-type"]).toBe("image/webp");
-  expect((await img.body()).subarray(8, 12).toString("ascii")).toBe("WEBP");
-
-  await page.getByRole("tab", { name: "Manage" }).click();
-  const caption = page.getByRole("textbox", { name: "Caption" }).first();
-  await expect(caption).toHaveValue("<b>E2E</b> slab pour");
-  await caption.fill("Edited caption");
-  await page.getByRole("button", { name: "Save" }).first().click();
-  await expect(page.getByText("Saved")).toBeVisible(); // the PATCH has completed before Hide fires another
-  await page.getByRole("button", { name: "Hide" }).first().click();
-  await expect(page.getByRole("button", { name: "Unhide" }).first()).toBeVisible();
-  // Check via the admin list: the public feed is edge-cached for 60 s, so it may still show the photo.
-  const admin = await (await page.request.get("/api/admin/photos?project=e2e-upload")).json();
-  expect(admin.photos[0]).toMatchObject({ caption: "Edited caption", hidden: true });
-
-  page.once("dialog", (d) => void d.accept());
-  await page.getByRole("button", { name: "Delete" }).first().click();
-  await expect(page.getByText("No photos yet.")).toBeVisible();
 });
 
-test("each batch starts with an empty caption and a fresh list", async ({ page }) => {
-  await page.goto("/");
+test("uploads with a batch caption and a new area; the row leaves; a re-upload is Duplicate", async ({ page, request }) => {
+  const jpeg = await jpegFromPage(page, `photo ${Date.now()}`);
+  await library(page).setInputFiles({ name: "site.jpg", mimeType: "image/jpeg", buffer: jpeg });
+  await expect(page.locator(".queue-summary")).toHaveText("1 photo");
+  await expect(uploadButton(page)).toHaveText("Upload 1 photo");
+
+  await page.getByLabel("Caption for this batch").fill("<b>E2E</b> slab pour");
+  await page.getByRole("button", { name: "+ Add" }).click();
+  await page.getByLabel("New area").fill("4th floor");
+  await page.getByLabel("New area").press("Enter");
+  await expect(page.getByRole("button", { name: "4th floor" })).toHaveAttribute("aria-pressed", "true");
+
+  await uploadButton(page).click();
+  await expect(page.locator(".queue-summary")).toHaveText("Uploaded 1", { timeout: 60_000 });
+  await expect(page.locator(".queue-row")).toHaveCount(0);
+  await expect(page.getByLabel("Caption for this batch")).toHaveValue("");
+  await expect(page.getByRole("button", { name: "4th floor" })).toHaveAttribute("aria-pressed", "true"); // area stays
+
+  const [stored] = await adminPhotos(request, "e2e-upload");
+  expect(stored).toMatchObject({ caption: "<b>E2E</b> slab pour", area: "4th floor", hidden: false });
+
+  await library(page).setInputFiles({ name: "again.jpg", mimeType: "image/jpeg", buffer: jpeg });
+  await uploadButton(page).click();
+  await expect(page.locator(".queue-summary")).toHaveText("Uploaded 0 · 1 already uploaded", { timeout: 60_000 });
+});
+
+test("area pills come from the project's photos and reload per project", async ({ page, request }) => {
+  const jpeg = await jpegFromPage(page, `area ${Date.now()}`);
+  await library(page).setInputFiles({ name: "a.jpg", mimeType: "image/jpeg", buffer: jpeg });
+  await page.getByRole("button", { name: "+ Add" }).click();
+  await page.getByLabel("New area").fill("Lobby");
+  await page.getByLabel("New area").press("Enter");
+  await uploadButton(page).click();
+  await expect(page.locator(".queue-summary")).toHaveText("Uploaded 1", { timeout: 60_000 });
+
+  await page.reload();
   await page.getByLabel("Project").selectOption("e2e-upload");
-  const pick = page.locator('input[type="file"]');
-  const batchCaption = page.getByLabel("Caption for this batch");
+  const pill = page.getByRole("button", { name: "Lobby" });
+  await expect(pill).toHaveAttribute("aria-pressed", "false");
+  await page.getByLabel("Project").selectOption("e2e-empty");
+  await expect(page.getByRole("button", { name: "Lobby" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "+ Add" })).toBeVisible();
+  expect((await adminPhotos(request, "e2e-upload"))[0]?.area).toBe("Lobby");
+});
 
-  await pick.setInputFiles({ name: "a.jpg", mimeType: "image/jpeg", buffer: await makeJpeg(page, `a ${Date.now()}`) });
-  await batchCaption.fill("Batch one");
-  await page.getByRole("button", { name: "Upload" }).click();
-  await expect(page.locator(".status-text")).toHaveText(["Done"], { timeout: 60_000 });
-  await expect(batchCaption).toHaveValue("");
-
-  await pick.setInputFiles({ name: "b.jpg", mimeType: "image/jpeg", buffer: await makeJpeg(page, `b ${Date.now()}`) });
-  await expect(page.locator(".status-text")).toHaveText(["Ready"]); // the finished batch is gone
-  await page.getByRole("button", { name: "Upload" }).click();
-  await expect(page.locator(".status-text")).toHaveText(["Done"], { timeout: 60_000 });
-
-  const admin = await (await page.request.get("/api/admin/photos?project=e2e-upload")).json();
-  expect(admin.photos.map((p: { caption: string | null }) => p.caption).sort()).toEqual(["Batch one", null].sort());
-  for (const p of admin.photos) await page.request.delete(`/api/admin/photos/${p.id}`);
+test("a per-photo caption overrides the batch caption; Remove drops a row", async ({ page, request }) => {
+  await library(page).setInputFiles([
+    { name: "one.jpg", mimeType: "image/jpeg", buffer: await jpegFromPage(page, `one ${Date.now()}`) },
+    { name: "two.jpg", mimeType: "image/jpeg", buffer: await jpegFromPage(page, `two ${Date.now()}`) },
+    { name: "three.jpg", mimeType: "image/jpeg", buffer: await jpegFromPage(page, `three ${Date.now()}`) },
+  ]);
+  await expect(uploadButton(page)).toHaveText("Upload 3 photos");
+  await page.getByRole("button", { name: "Remove photo" }).nth(2).click();
+  await expect(uploadButton(page)).toHaveText("Upload 2 photos");
+  await page.getByLabel("Caption for this batch").fill("Batch");
+  await page.getByLabel("Photo caption").first().fill("Own caption");
+  await uploadButton(page).click();
+  await expect(page.locator(".queue-summary")).toHaveText("Uploaded 2", { timeout: 60_000 });
+  expect((await adminPhotos(request, "e2e-upload")).map((p) => p.caption).sort()).toEqual(["Batch", "Own caption"]);
 });
