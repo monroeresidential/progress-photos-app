@@ -1,4 +1,4 @@
-import "./style.css";
+import "./theme.css";
 import type { ProjectSummary } from "../shared/types";
 import { api, errorMessage } from "./api";
 import { h } from "./dom";
