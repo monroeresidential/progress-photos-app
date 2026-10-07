@@ -151,3 +151,11 @@ export function errorMessage(err: unknown): string {
   if (err instanceof ApiError && err.code === "signin_required") return "Your sign-in expired. Close and reopen the app to sign in again.";
   return err instanceof Error ? err.message : String(err);
 }
+
+export function deleteNote(res: { purged?: boolean; objectsDeleted?: boolean } | undefined): string {
+  if (res?.objectsDeleted === false) {
+    return "Removed from the feed, but the image files couldn't be deleted and may still be reachable by direct link. Tell the site admin.";
+  }
+  if (res?.purged === false) return "Deleted. Cached copies may take a minute to disappear.";
+  return "";
+}

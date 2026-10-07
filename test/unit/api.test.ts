@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ApiError, createStallTimer, errorMessage, interpretProbe } from "../../src/app/api";
+import { ApiError, createStallTimer, deleteNote, errorMessage, interpretProbe } from "../../src/app/api";
 
 describe("interpretProbe", () => {
   it("treats a redirect to the Access login or a 401 as an expired session", () => {
@@ -40,5 +40,15 @@ describe("createStallTimer", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("deleteNote", () => {
+  it("explains a partial delete, and says nothing for a clean one", () => {
+    expect(deleteNote(undefined)).toBe("");
+    expect(deleteNote({ purged: false })).toBe("Deleted. Cached copies may take a minute to disappear.");
+    expect(deleteNote({ purged: true, objectsDeleted: false })).toBe(
+      "Removed from the feed, but the image files couldn't be deleted and may still be reachable by direct link. Tell the site admin.",
+    );
   });
 });

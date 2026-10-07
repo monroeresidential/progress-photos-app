@@ -1,3 +1,5 @@
+import { exifToIso } from "../../shared/time";
+
 export interface JpegMeta {
   width: number;
   height: number;
@@ -80,4 +82,31 @@ function readExif(v: DataView, t: number, meta: JpegMeta): void {
 /** EXIF orientations 5–8 rotate by 90°, so the upright image has width and height swapped. */
 export function orientedSize(width: number, height: number, orientation: number) {
   return orientation >= 5 && orientation <= 8 ? { width: height, height: width } : { width, height };
+}
+
+/** EXIF capture time (ISO 8601 with offset) from the start of a JPEG; the APP1 segment precedes the image data. */
+export function readCaptureTime(buf: ArrayBuffer): string | null {
+  const v = new DataView(buf);
+  try {
+    if (v.getUint16(0) !== 0xffd8) return null;
+    for (let o = 2; o + 4 <= v.byteLength; ) {
+      if (v.getUint8(o) !== 0xff) return null;
+      const marker = v.getUint8(o + 1);
+      if (marker === 0xff) {
+        o++;
+        continue;
+      }
+      if (marker === 0xda) return null;
+      const len = v.getUint16(o + 2);
+      if (marker === 0xe1 && len >= 8 && ascii(v, o + 4, 6) === "Exif\0\0") {
+        const meta: JpegMeta = { width: 0, height: 0, orientation: 1, dateTimeOriginal: null, offsetTimeOriginal: null };
+        readExif(v, o + 10, meta);
+        return meta.dateTimeOriginal ? exifToIso(meta.dateTimeOriginal, meta.offsetTimeOriginal) : null;
+      }
+      o += 2 + len;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
