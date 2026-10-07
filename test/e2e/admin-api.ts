@@ -51,7 +51,7 @@ export async function clearProject(request: APIRequestContext, project: string):
 
 export async function adminPhotos(request: APIRequestContext, project: string) {
   return ((await (await request.get(`/api/admin/photos?project=${project}`)).json()) as {
-    photos: { id: string; caption: string | null; area: string | null; hidden: boolean }[];
+    photos: { id: string; caption: string | null; area: string | null; hidden: boolean; srcset: Record<string, string> }[];
   }).photos;
 }
 

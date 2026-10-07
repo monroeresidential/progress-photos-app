@@ -63,6 +63,8 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
   let areas: string[] = [];
   let finished = { done: 0, duplicate: 0 };
   let areaRequest = 0;
+  let adding = false;
+  let pendingRender = false;
 
   const cameraInput = h("input", { type: "file", accept: "image/*", capture: "environment", hidden: true, onchange: () => void addFiles(cameraInput) });
   const libraryInput = h("input", { type: "file", accept: "image/*", multiple: true, hidden: true, onchange: () => void addFiles(libraryInput) });
@@ -106,7 +108,16 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     if (items.some((i) => i.status === "ready" || i.status === "working")) e.preventDefault();
   });
 
+  function dropRow(item: Item): void {
+    if (item.thumb.src.startsWith("blob:")) URL.revokeObjectURL(item.thumb.src);
+    item.row.remove();
+  }
+
   function renderPills(): void {
+    if (adding) {
+      pendingRender = true;
+      return;
+    }
     const all = area && !areas.includes(area) ? [area, ...areas] : areas;
     pills.replaceChildren(
       ...all.map((a) =>
@@ -127,9 +138,12 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
   function startAdd(): void {
     const input = h("input", { class: "pill-input", type: "text", maxLength: 40, "aria-label": "New area", enterKeyHint: "done" });
     let closed = false;
+    adding = true;
     const finish = (save: boolean) => {
       if (closed) return;
       closed = true;
+      adding = false;
+      pendingRender = false;
       const v = input.value.trim();
       if (save && v) area = v;
       renderPills();
@@ -172,7 +186,12 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     uploadBtn.textContent = ready === 0 ? "Upload" : `Upload ${plural(ready, "photo")}`;
     const shown = items.filter((i) => i.row.isConnected);
     const uploading = items.filter((i) => i.status === "working").length;
-    if (shown.length > 0) {
+    const active = items.some((i) => i.status === "ready" || i.status === "working");
+    if (!active && finished.done + finished.duplicate > 0) {
+      const k = shown.length;
+      summary.textContent = `Uploaded ${finished.done}${finished.duplicate ? ` · ${finished.duplicate} already uploaded` : ""}${k ? ` · ${k} need attention` : ""}`;
+      range.textContent = "";
+    } else if (shown.length > 0) {
       summary.textContent = `${plural(shown.length, "photo")}${uploading ? ` · ${uploading} uploading` : ""}`;
       range.textContent = timeRange(shown.map((i) => i.takenAt));
     } else if (finished.done + finished.duplicate > 0) {
@@ -188,7 +207,7 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     setTimeout(() => {
       item.row.classList.add("is-leaving");
       setTimeout(() => {
-        item.row.remove();
+        dropRow(item);
         refresh();
       }, reducedMotion() ? 0 : FADE_MS);
     }, LEAVE_AFTER_MS);
@@ -213,7 +232,7 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     const caption = h("input", { class: "input", type: "text", maxLength: 280, placeholder: "Caption (overrides batch)", "aria-label": "Photo caption" });
     const statusText = h("span", { class: "status-text" });
     const fill = h("div", { class: "progress-fill" });
-    const progress = h("div", { class: "progress", hidden: true }, fill);
+    const progress = h("div", { class: "progress", hidden: true, role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": "0" }, fill);
     const retry = h("button", { type: "button", class: "link-btn", hidden: true }, "Retry");
     const remove = h("button", { type: "button", class: "icon-btn", "aria-label": "Remove photo" }, icon("x", 18));
     const row = h("li", { class: "queue-row" }, thumb, h("div", { class: "row-main" }, caption, h("div", { class: "row-status" }, statusText, progress, retry)), remove);
@@ -223,8 +242,9 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
       void runQueue();
     });
     remove.addEventListener("click", () => {
-      items.splice(items.indexOf(item), 1);
-      row.remove();
+      const i = items.indexOf(item);
+      if (i >= 0) items.splice(i, 1);
+      dropRow(item);
       refresh();
     });
     queue.append(row);
@@ -238,7 +258,7 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
     if (files.length === 0) return;
     if (batchFinished()) {
       // Start a new batch: drop the finished one so its rows and counts don't carry over.
-      for (const item of items) item.row.remove();
+      for (const item of items) dropRow(item);
       items.length = 0;
       finished = { done: 0, duplicate: 0 };
     }
@@ -261,7 +281,11 @@ export function mountUpload(container: HTMLElement, getProject: () => ProjectSum
       item.processed ??= await processPhoto(item.file);
       item.takenAt = item.processed.takenAt;
       const caption = item.caption.value.trim() || batch.caption;
-      const res = await uploadPhoto(project.slug, item.processed, { caption, area: batch.area }, (f) => (item.fill.style.width = `${Math.round(f * 100)}%`));
+      const res = await uploadPhoto(project.slug, item.processed, { caption, area: batch.area }, (f) => {
+        const pct = Math.round(f * 100);
+        item.fill.style.width = `${pct}%`;
+        item.progress.setAttribute("aria-valuenow", String(pct));
+      });
       item.processed = undefined;
       setStatus(item, res.duplicate ? "duplicate" : "done");
     } catch (err) {

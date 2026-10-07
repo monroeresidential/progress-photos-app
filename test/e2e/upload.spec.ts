@@ -32,6 +32,9 @@ test("uploads with a batch caption and a new area; the row leaves; a re-upload i
 
   const [stored] = await adminPhotos(request, "e2e-upload");
   expect(stored).toMatchObject({ caption: "<b>E2E</b> slab pour", area: "4th floor", hidden: false });
+  const img = await request.get(stored.srcset["960"]);
+  expect(img.headers()["content-type"]).toBe("image/webp");
+  expect((await img.body()).subarray(8, 12).toString("ascii")).toBe("WEBP");
 
   await library(page).setInputFiles({ name: "again.jpg", mimeType: "image/jpeg", buffer: jpeg });
   await uploadButton(page).click();
